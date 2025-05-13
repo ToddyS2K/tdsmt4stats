@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from io import BytesIO
 from fpdf import FPDF
+import tempfile
+import os
 
 st.title("Analisi conto MT4 (Profitto in percentuale)")
 
@@ -26,7 +28,7 @@ if uploaded_file is not None:
 
     # Solo trade chiusi
     df_closed = df[df['Close Date'].notna()].sort_values('Close Date').reset_index(drop=True)
-    df_closed['Profit'] = pd.to_numeric(df_closed['Profit'], errors='coerce')
+    df_closed['Profit'] = pd.to_numeric(df_closed['Profit'], errors='coerce').round(2)
 
     # Equity e Drawdown
     df_closed['Equity'] = starting_equity + df_closed['Profit'].cumsum()
@@ -88,6 +90,10 @@ if uploaded_file is not None:
     fig1.tight_layout()
     st.pyplot(fig1)
 
+    # Salvataggio grafico equity temporaneo
+    temp_eq_path = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    fig1.savefig(temp_eq_path.name)
+
     # Grafico Drawdown
     st.subheader("📊 Drawdown (%)")
     fig2, ax2 = plt.subplots()
@@ -101,11 +107,16 @@ if uploaded_file is not None:
     fig2.tight_layout()
     st.pyplot(fig2)
 
-    # Tabella trade chiusi con colori
+    # Salvataggio grafico drawdown temporaneo
+    temp_dd_path = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    fig2.savefig(temp_dd_path.name)
+
+    # Tabella trade chiusi
     st.subheader("🧾 Trade Chiusi (in %)")
     closed_table = df_closed[['Close Date', 'Symbol', 'Action', 'Profit']].copy()
     closed_table['Profit %'] = (closed_table['Profit'] / starting_equity * 100).round(2)
-    closed_table = closed_table[['Close Date', 'Symbol', 'Action', 'Profit %']]
+    closed_table['Profit'] = closed_table['Profit'].round(2)
+    closed_table = closed_table[['Close Date', 'Symbol', 'Action', 'Profit', 'Profit %']]
 
     def color_profit(val):
         if val > 0:
@@ -113,18 +124,18 @@ if uploaded_file is not None:
         elif val < 0:
             return 'color: red'
         else:
-            return ''  # nessun colore per 0
+            return ''
 
     styled_closed = closed_table.style.applymap(color_profit, subset=['Profit %'])
     st.dataframe(styled_closed)
 
-    # Funzione per esportazione PDF
-    def generate_pdf(stats, table):
+    # Generazione PDF
+    def generate_pdf(stats, table, equity_img, drawdown_img):
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", size=12)
-        pdf.cell(200, 10, txt="Report MT4 - Trade Chiusi", ln=True, align='C')
-        pdf.ln(10)
+        pdf.cell(200, 10, "Report MT4 - Trade Chiusi", ln=True, align='C')
+        pdf.ln(8)
 
         pdf.set_font("Arial", 'B', 12)
         pdf.cell(200, 10, "Statistiche", ln=True)
@@ -132,24 +143,38 @@ if uploaded_file is not None:
         for key, value in stats.items():
             pdf.cell(200, 8, f"{key}: {value}", ln=True)
 
-        pdf.ln(10)
+        pdf.ln(5)
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(200, 10, "Equity Curve", ln=True)
+        pdf.image(equity_img, w=180)
+        pdf.ln(5)
+
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(200, 10, "Drawdown", ln=True)
+        pdf.image(drawdown_img, w=180)
+        pdf.ln(5)
+
         pdf.set_font("Arial", 'B', 12)
         pdf.cell(200, 10, "Trade Chiusi", ln=True)
         pdf.set_font("Arial", size=9)
-        for index, row in table.iterrows():
-            pdf.cell(200, 6, f"{row['Close Date'].date()} | {row['Symbol']} | {row['Action']} | {row['Profit %']}%", ln=True)
+        for _, row in table.iterrows():
+            pdf.cell(200, 6, f"{row['Close Date'].date()} | {row['Symbol']} | {row['Action']} | €{row['Profit']:.2f} | {row['Profit %']}%", ln=True)
 
         pdf_bytes = pdf.output(dest='S').encode('latin1')
         return BytesIO(pdf_bytes)
 
     st.subheader("📄 Esporta PDF")
-    pdf_buffer = generate_pdf(stats, closed_table)
+    pdf_buffer = generate_pdf(stats, closed_table, temp_eq_path.name, temp_dd_path.name)
     st.download_button(
-        label="📥 Scarica PDF",
+        label="📥 Scarica PDF con grafici",
         data=pdf_buffer,
-        file_name="report_mt4.pdf",
+        file_name="report_mt4_completo.pdf",
         mime="application/pdf"
     )
+
+    # Pulizia file temporanei
+    os.remove(temp_eq_path.name)
+    os.remove(temp_dd_path.name)
 
 else:
     st.info("Carica un file CSV per iniziare.")
