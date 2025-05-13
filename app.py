@@ -123,30 +123,29 @@ if uploaded_file is not None:
     st.subheader("📄 Esporta PDF")
 
     def generate_pdf(stats, table):
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", size=12)
-        pdf.cell(200, 10, txt="Report MT4 - Trade Chiusi", ln=True, align='C')
-        pdf.ln(10)
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt="Report MT4 - Trade Chiusi", ln=True, align='C')
+    pdf.ln(10)
 
-        pdf.set_font("Arial", 'B', 12)
-        pdf.cell(200, 10, "Statistiche", ln=True)
-        pdf.set_font("Arial", size=10)
-        for key, value in stats.items():
-            pdf.cell(200, 8, f"{key}: {value}", ln=True)
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(200, 10, "Statistiche", ln=True)
+    pdf.set_font("Arial", size=10)
+    for key, value in stats.items():
+        pdf.cell(200, 8, f"{key}: {value}", ln=True)
 
-        pdf.ln(10)
-        pdf.set_font("Arial", 'B', 12)
-        pdf.cell(200, 10, "Trade Chiusi", ln=True)
-        pdf.set_font("Arial", size=9)
-        for index, row in table.iterrows():
-            pdf.cell(200, 6, f"{row['Close Date'].date()} | {row['Symbol']} | {row['Action']} | {row['Profit %']}%", ln=True)
+    pdf.ln(10)
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(200, 10, "Trade Chiusi", ln=True)
+    pdf.set_font("Arial", size=9)
+    for index, row in table.iterrows():
+        pdf.cell(200, 6, f"{row['Close Date'].date()} | {row['Symbol']} | {row['Action']} | {row['Profit %']}%", ln=True)
 
-        # Output PDF
-        buffer = BytesIO()
-        pdf.output(buffer)
-        buffer.seek(0)
-        return buffer
+    # ✅ Output PDF come bytes
+    pdf_bytes = pdf.output(dest='S').encode('latin1')
+    return BytesIO(pdf_bytes)
+
 
     pdf_buffer = generate_pdf(stats, closed_table)
     st.download_button(
