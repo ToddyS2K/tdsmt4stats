@@ -2,10 +2,12 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+from io import BytesIO
+from fpdf import FPDF
 
 st.title("Analisi conto MT4 (Profitto in percentuale)")
 
-# Capitale iniziale
+# Inserimento capitale iniziale
 starting_equity = st.number_input("Inserisci il capitale iniziale (€)", min_value=1.0, value=1000.0)
 
 if starting_equity <= 0:
@@ -22,15 +24,12 @@ if uploaded_file is not None:
     df['Open Date'] = pd.to_datetime(df['Open Date'], dayfirst=True, errors='coerce')
     df['Close Date'] = pd.to_datetime(df['Close Date'], dayfirst=True, errors='coerce')
 
-    # Separazione trade chiusi e aperti
+    # Separazione trade chiusi
     df_closed = df[df['Close Date'].notna()].sort_values('Close Date').reset_index(drop=True)
-    df_open = df[df['Close Date'].isna()].copy()
 
-    # Equity: trade chiusi + aperti (unrealized)
-    df_all = pd.concat([df_closed, df_open])
-    df_all = df_all.sort_values(by='Close Date', na_position='last').reset_index(drop=True)
+    # Calcoli equity/drawdown
+    df_all = df_closed.copy()
     df_all['Profit'] = pd.to_numeric(df_all['Profit'], errors='coerce')
-
     df_all['Equity'] = starting_equity + df_all['Profit'].cumsum()
     df_all['Equity %'] = (df_all['Equity'] - starting_equity) / starting_equity * 100
     df_all['High Watermark'] = df_all['Equity'].cummax()
@@ -40,7 +39,7 @@ if uploaded_file is not None:
 
     st.subheader(f"📉 Max Drawdown: {max_drawdown:.2f}%")
 
-    # Statistiche solo trade chiusi
+    # Statistiche
     st.subheader("📈 Statistiche del Trading")
 
     total_trades = len(df_closed)
@@ -68,8 +67,8 @@ if uploaded_file is not None:
     for key, value in stats.items():
         st.write(f"**{key}:** {value}")
 
-    # Interpolazione giornaliera (solo su trade chiusi)
-    daily_data = df_all[df_all['Close Date'].notna()][['Close Date', 'Equity %', 'Drawdown %']].copy()
+    # Interpolazione equity
+    daily_data = df_all[['Close Date', 'Equity %', 'Drawdown %']].copy()
     daily_data = (
         daily_data.groupby('Close Date').last()
         .resample('D')
@@ -77,7 +76,7 @@ if uploaded_file is not None:
         .reset_index()
     )
 
-    # Grafico Equity
+    # Grafico equity
     st.subheader("📊 Equity Curve (%)")
     fig1, ax1 = plt.subplots()
     ax1.plot(daily_data['Close Date'], daily_data['Equity %'], linewidth=2)
@@ -90,7 +89,7 @@ if uploaded_file is not None:
     fig1.tight_layout()
     st.pyplot(fig1)
 
-    # Grafico Drawdown
+    # Grafico drawdown
     st.subheader("📊 Drawdown (%)")
     fig2, ax2 = plt.subplots()
     ax2.plot(daily_data['Close Date'], daily_data['Drawdown %'], color='red', linewidth=2)
@@ -110,26 +109,52 @@ if uploaded_file is not None:
     closed_table = closed_table[['Close Date', 'Symbol', 'Action', 'Profit %']]
 
     def color_profit(val):
-        color = 'green' if val > 0 else 'red' if val < 0 else 'black'
-        return f'color: {color}'
+        if val > 0:
+            return 'color: green'
+        elif val < 0:
+            return 'color: red'
+        else:
+            return ''  # nessun colore per 0
 
     styled_closed = closed_table.style.applymap(color_profit, subset=['Profit %'])
     st.dataframe(styled_closed)
 
-    # Tabella operazioni aperte
-    if not df_open.empty:
-        st.subheader("📌 Operazioni Aperte (non chiuse)")
-        open_table = df_open[['Open Date', 'Symbol', 'Action', 'Profit']].copy()
-        open_table['Profit %'] = (open_table['Profit'] / starting_equity * 100).round(2)
-        open_table = open_table[['Open Date', 'Symbol', 'Action', 'Profit %']]
-        styled_open = open_table.style.applymap(color_profit, subset=['Profit %'])
-        st.dataframe(styled_open)
+    # Esportazione PDF
+    st.subheader("📄 Esporta PDF")
 
-    # Esportazione CSV
-    st.subheader("⬇️ Esporta dati")
-    export_df = closed_table.copy()
-    csv = export_df.to_csv(index=False).encode('utf-8')
-    st.download_button("Scarica Trade Chiusi in CSV", data=csv, file_name="trade_chiusi.csv", mime="text/csv")
+    def generate_pdf(stats, table):
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+        pdf.cell(200, 10, txt="Report MT4 - Trade Chiusi", ln=True, align='C')
+        pdf.ln(10)
+
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(200, 10, "Statistiche", ln=True)
+        pdf.set_font("Arial", size=10)
+        for key, value in stats.items():
+            pdf.cell(200, 8, f"{key}: {value}", ln=True)
+
+        pdf.ln(10)
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(200, 10, "Trade Chiusi", ln=True)
+        pdf.set_font("Arial", size=9)
+        for index, row in table.iterrows():
+            pdf.cell(200, 6, f"{row['Close Date'].date()} | {row['Symbol']} | {row['Action']} | {row['Profit %']}%", ln=True)
+
+        # Output PDF
+        buffer = BytesIO()
+        pdf.output(buffer)
+        buffer.seek(0)
+        return buffer
+
+    pdf_buffer = generate_pdf(stats, closed_table)
+    st.download_button(
+        label="📥 Scarica PDF",
+        data=pdf_buffer,
+        file_name="report_mt4.pdf",
+        mime="application/pdf"
+    )
 
 else:
     st.info("Carica un file CSV per iniziare.")
