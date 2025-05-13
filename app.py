@@ -60,7 +60,8 @@ if uploaded_file is not None:
         "Profitto medio per trade (%)": f"{avg_profit_per_trade:.2f}%",
         "Profitto totale (%)": f"{total_profit:.2f}%",
         "Profit factor": f"{profit_factor:.2f}",
-        "Rapporto Win/Loss": f"{win_loss_ratio:.2f}"
+        "Rapporto Win/Loss": f"{win_loss_ratio:.2f}",
+        "Max Drawdown (%)": f"{max_drawdown:.2f}%"
     }
 
     for key, value in stats.items():
