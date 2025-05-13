@@ -43,7 +43,7 @@ if uploaded_file is not None:
     total_profit = df['Profit %'].sum()
 
     gross_profit = winning_trades['Profit'].sum()
-    gross_loss = -losing_trades['Profit'].sum()  # negativo → positivo
+    gross_loss = -losing_trades['Profit'].sum()
     profit_factor = gross_profit / gross_loss if gross_loss != 0 else float('inf')
     win_loss_ratio = len(winning_trades) / len(losing_trades) if len(losing_trades) > 0 else float('inf')
 
@@ -61,7 +61,12 @@ if uploaded_file is not None:
 
     # === Interpolazione Equity e Drawdown giornalieri ===
     daily_data = df[['Close Date', 'Equity %', 'Drawdown %']].copy()
-    daily_data = daily_data.set_index('Close Date').resample('D').ffill().reset_index()
+    daily_data = (
+        daily_data.groupby('Close Date').last()
+        .resample('D')
+        .ffill()
+        .reset_index()
+    )
 
     # === Grafico Equity % ===
     st.subheader("📊 Equity Curve (%)")
