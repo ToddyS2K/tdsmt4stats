@@ -24,18 +24,17 @@ if uploaded_file is not None:
     df['Open Date'] = pd.to_datetime(df['Open Date'], dayfirst=True, errors='coerce')
     df['Close Date'] = pd.to_datetime(df['Close Date'], dayfirst=True, errors='coerce')
 
-    # Separazione trade chiusi
+    # Solo trade chiusi
     df_closed = df[df['Close Date'].notna()].sort_values('Close Date').reset_index(drop=True)
+    df_closed['Profit'] = pd.to_numeric(df_closed['Profit'], errors='coerce')
 
-    # Calcoli equity/drawdown
-    df_all = df_closed.copy()
-    df_all['Profit'] = pd.to_numeric(df_all['Profit'], errors='coerce')
-    df_all['Equity'] = starting_equity + df_all['Profit'].cumsum()
-    df_all['Equity %'] = (df_all['Equity'] - starting_equity) / starting_equity * 100
-    df_all['High Watermark'] = df_all['Equity'].cummax()
-    df_all['Drawdown'] = df_all['Equity'] - df_all['High Watermark']
-    df_all['Drawdown %'] = df_all['Drawdown'] / df_all['High Watermark'] * 100
-    max_drawdown = df_all['Drawdown %'].min()
+    # Equity e Drawdown
+    df_closed['Equity'] = starting_equity + df_closed['Profit'].cumsum()
+    df_closed['Equity %'] = (df_closed['Equity'] - starting_equity) / starting_equity * 100
+    df_closed['High Watermark'] = df_closed['Equity'].cummax()
+    df_closed['Drawdown'] = df_closed['Equity'] - df_closed['High Watermark']
+    df_closed['Drawdown %'] = df_closed['Drawdown'] / df_closed['High Watermark'] * 100
+    max_drawdown = df_closed['Drawdown %'].min()
 
     st.subheader(f"📉 Max Drawdown: {max_drawdown:.2f}%")
 
@@ -67,8 +66,8 @@ if uploaded_file is not None:
     for key, value in stats.items():
         st.write(f"**{key}:** {value}")
 
-    # Interpolazione equity
-    daily_data = df_all[['Close Date', 'Equity %', 'Drawdown %']].copy()
+    # Interpolazione giornaliera
+    daily_data = df_closed[['Close Date', 'Equity %', 'Drawdown %']].copy()
     daily_data = (
         daily_data.groupby('Close Date').last()
         .resample('D')
@@ -76,7 +75,7 @@ if uploaded_file is not None:
         .reset_index()
     )
 
-    # Grafico equity
+    # Grafico Equity
     st.subheader("📊 Equity Curve (%)")
     fig1, ax1 = plt.subplots()
     ax1.plot(daily_data['Close Date'], daily_data['Equity %'], linewidth=2)
@@ -89,7 +88,7 @@ if uploaded_file is not None:
     fig1.tight_layout()
     st.pyplot(fig1)
 
-    # Grafico drawdown
+    # Grafico Drawdown
     st.subheader("📊 Drawdown (%)")
     fig2, ax2 = plt.subplots()
     ax2.plot(daily_data['Close Date'], daily_data['Drawdown %'], color='red', linewidth=2)
@@ -102,7 +101,7 @@ if uploaded_file is not None:
     fig2.tight_layout()
     st.pyplot(fig2)
 
-    # Tabella trade chiusi
+    # Tabella trade chiusi con colori
     st.subheader("🧾 Trade Chiusi (in %)")
     closed_table = df_closed[['Close Date', 'Symbol', 'Action', 'Profit']].copy()
     closed_table['Profit %'] = (closed_table['Profit'] / starting_equity * 100).round(2)
@@ -119,34 +118,31 @@ if uploaded_file is not None:
     styled_closed = closed_table.style.applymap(color_profit, subset=['Profit %'])
     st.dataframe(styled_closed)
 
-    # Esportazione PDF
-    st.subheader("📄 Esporta PDF")
-
+    # Funzione per esportazione PDF
     def generate_pdf(stats, table):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, txt="Report MT4 - Trade Chiusi", ln=True, align='C')
-    pdf.ln(10)
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+        pdf.cell(200, 10, txt="Report MT4 - Trade Chiusi", ln=True, align='C')
+        pdf.ln(10)
 
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(200, 10, "Statistiche", ln=True)
-    pdf.set_font("Arial", size=10)
-    for key, value in stats.items():
-        pdf.cell(200, 8, f"{key}: {value}", ln=True)
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(200, 10, "Statistiche", ln=True)
+        pdf.set_font("Arial", size=10)
+        for key, value in stats.items():
+            pdf.cell(200, 8, f"{key}: {value}", ln=True)
 
-    pdf.ln(10)
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(200, 10, "Trade Chiusi", ln=True)
-    pdf.set_font("Arial", size=9)
-    for index, row in table.iterrows():
-        pdf.cell(200, 6, f"{row['Close Date'].date()} | {row['Symbol']} | {row['Action']} | {row['Profit %']}%", ln=True)
+        pdf.ln(10)
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(200, 10, "Trade Chiusi", ln=True)
+        pdf.set_font("Arial", size=9)
+        for index, row in table.iterrows():
+            pdf.cell(200, 6, f"{row['Close Date'].date()} | {row['Symbol']} | {row['Action']} | {row['Profit %']}%", ln=True)
 
-    # ✅ Output PDF come bytes
-    pdf_bytes = pdf.output(dest='S').encode('latin1')
-    return BytesIO(pdf_bytes)
+        pdf_bytes = pdf.output(dest='S').encode('latin1')
+        return BytesIO(pdf_bytes)
 
-
+    st.subheader("📄 Esporta PDF")
     pdf_buffer = generate_pdf(stats, closed_table)
     st.download_button(
         label="📥 Scarica PDF",
