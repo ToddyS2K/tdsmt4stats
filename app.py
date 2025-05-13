@@ -13,7 +13,7 @@ st.title("Analisi conto MT4 (Profitto in percentuale)")
 starting_equity = st.number_input("Inserisci il capitale iniziale (€)", min_value=1.0, value=1000.0)
 
 if starting_equity <= 0:
-    st.error("\u26a0\ufe0f Inserisci un capitale iniziale maggiore di 0.")
+    st.error("⚠️ Inserisci un capitale iniziale maggiore di 0.")
     st.stop()
 
 uploaded_file = st.file_uploader("Carica il file CSV esportato da Myfxbook", type=["csv"])
@@ -37,10 +37,10 @@ if uploaded_file is not None:
     df_closed['Drawdown %'] = df_closed['Drawdown'] / df_closed['High Watermark'] * 100
     max_drawdown = df_closed['Drawdown %'].min()
 
-    st.subheader(f"\ud83d\udcc9 Max Drawdown: {max_drawdown:.2f}%")
+    st.subheader(f"📉 Max Drawdown: {max_drawdown:.2f}%")
 
     # Statistiche
-    st.subheader("\ud83d\udcc8 Statistiche del Trading")
+    st.subheader("📈 Statistiche del Trading")
     total_trades = len(df_closed)
     winning_trades = df_closed[df_closed['Profit'] > 0]
     losing_trades = df_closed[df_closed['Profit'] < 0]
@@ -76,7 +76,7 @@ if uploaded_file is not None:
     )
 
     # Grafico Equity
-    st.subheader("\ud83d\udcca Equity Curve (%)")
+    st.subheader("📊 Equity Curve (%)")
     fig1, ax1 = plt.subplots()
     ax1.plot(daily_data['Close Date'], daily_data['Equity %'], linewidth=2)
     ax1.set_xlabel("Data")
@@ -92,7 +92,7 @@ if uploaded_file is not None:
     fig1.savefig(temp_eq_path.name)
 
     # Grafico Drawdown
-    st.subheader("\ud83d\udcca Drawdown (%)")
+    st.subheader("📊 Drawdown (%)")
     fig2, ax2 = plt.subplots()
     ax2.plot(daily_data['Close Date'], daily_data['Drawdown %'], color='red', linewidth=2)
     ax2.set_xlabel("Data")
@@ -108,7 +108,7 @@ if uploaded_file is not None:
     fig2.savefig(temp_dd_path.name)
 
     # Tabella con solo Profit %
-    st.markdown("### \ud83d\udccb Trade Chiusi (in %)")
+    st.markdown("### 🧾 Trade Chiusi (in %)")
     closed_table = df_closed[['Close Date', 'Symbol', 'Action', 'Profit']].copy()
     closed_table['Profit %'] = (closed_table['Profit'] / starting_equity * 100).round(2)
     closed_table = closed_table[['Close Date', 'Symbol', 'Action', 'Profit %']]
@@ -137,8 +137,6 @@ if uploaded_file is not None:
         pdf.cell(200, 10, "Statistiche", ln=True)
         pdf.set_font("Arial", size=10)
 
-        stat_keys = list(stats.keys())
-        stat_values = list(stats.values())
         col1_width = 90
         col2_width = 90
 
@@ -193,10 +191,10 @@ if uploaded_file is not None:
         pdf_bytes = pdf.output(dest='S').encode('latin1')
         return BytesIO(pdf_bytes)
 
-    st.subheader("\ud83d\udcc4 Esporta PDF")
+    st.subheader("📄 Esporta PDF")
     pdf_buffer = generate_pdf(stats, closed_table, temp_eq_path.name, temp_dd_path.name)
     st.download_button(
-        label="\ud83d\udcc5 Scarica PDF con grafici",
+        label="📥 Scarica PDF con grafici",
         data=pdf_buffer,
         file_name="report_mt4_completo.pdf",
         mime="application/pdf"
