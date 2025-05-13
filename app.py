@@ -5,31 +5,32 @@ import matplotlib.dates as mdates
 
 st.title("Analisi conto MT4 (Profitto in percentuale)")
 
-# Inserimento capitale iniziale
+# Capitale iniziale
 starting_equity = st.number_input("Inserisci il capitale iniziale (€)", min_value=1.0, value=1000.0)
 
 if starting_equity <= 0:
     st.error("⚠️ Inserisci un capitale iniziale maggiore di 0.")
     st.stop()
 
-# Upload del file CSV
+# Caricamento CSV
 uploaded_file = st.file_uploader("Carica il file CSV esportato da Myfxbook", type=["csv"])
 
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
 
-    # Parsing delle date
+    # Parsing date
     df['Open Date'] = pd.to_datetime(df['Open Date'], dayfirst=True, errors='coerce')
     df['Close Date'] = pd.to_datetime(df['Close Date'], dayfirst=True, errors='coerce')
 
     # Separazione trade chiusi e aperti
     df_closed = df[df['Close Date'].notna()].sort_values('Close Date').reset_index(drop=True)
-    df_open = df[df['Close Date'].isna()]
+    df_open = df[df['Close Date'].isna()].copy()
 
-    # Calcoli equity su TUTTI i trade (chiusi + aperti)
+    # Equity: trade chiusi + aperti (unrealized)
     df_all = pd.concat([df_closed, df_open])
     df_all = df_all.sort_values(by='Close Date', na_position='last').reset_index(drop=True)
     df_all['Profit'] = pd.to_numeric(df_all['Profit'], errors='coerce')
+
     df_all['Equity'] = starting_equity + df_all['Profit'].cumsum()
     df_all['Equity %'] = (df_all['Equity'] - starting_equity) / starting_equity * 100
     df_all['High Watermark'] = df_all['Equity'].cummax()
@@ -39,7 +40,7 @@ if uploaded_file is not None:
 
     st.subheader(f"📉 Max Drawdown: {max_drawdown:.2f}%")
 
-    # Statistiche sui trade CHIUSI
+    # Statistiche solo trade chiusi
     st.subheader("📈 Statistiche del Trading")
 
     total_trades = len(df_closed)
@@ -47,7 +48,7 @@ if uploaded_file is not None:
     losing_trades = df_closed[df_closed['Profit'] < 0]
 
     win_rate = len(winning_trades) / total_trades * 100 if total_trades > 0 else 0
-    avg_profit_per_trade = (df_closed['Profit'].sum() / total_trades) / starting_equity * 100 if total_trades > 0 else 0
+    avg_profit_per_trade = df_closed['Profit'].mean() / starting_equity * 100 if total_trades > 0 else 0
     total_profit = df_closed['Profit'].sum() / starting_equity * 100
 
     gross_profit = winning_trades['Profit'].sum()
@@ -67,7 +68,7 @@ if uploaded_file is not None:
     for key, value in stats.items():
         st.write(f"**{key}:** {value}")
 
-    # Interpolazione giornaliera (solo con date disponibili)
+    # Interpolazione giornaliera (solo su trade chiusi)
     daily_data = df_all[df_all['Close Date'].notna()][['Close Date', 'Equity %', 'Drawdown %']].copy()
     daily_data = (
         daily_data.groupby('Close Date').last()
@@ -76,7 +77,7 @@ if uploaded_file is not None:
         .reset_index()
     )
 
-    # Grafico Equity %
+    # Grafico Equity
     st.subheader("📊 Equity Curve (%)")
     fig1, ax1 = plt.subplots()
     ax1.plot(daily_data['Close Date'], daily_data['Equity %'], linewidth=2)
@@ -89,7 +90,7 @@ if uploaded_file is not None:
     fig1.tight_layout()
     st.pyplot(fig1)
 
-    # Grafico Drawdown %
+    # Grafico Drawdown
     st.subheader("📊 Drawdown (%)")
     fig2, ax2 = plt.subplots()
     ax2.plot(daily_data['Close Date'], daily_data['Drawdown %'], color='red', linewidth=2)
@@ -102,19 +103,33 @@ if uploaded_file is not None:
     fig2.tight_layout()
     st.pyplot(fig2)
 
-    # Tabella solo trade chiusi con colori
-    st.subheader("🧾 Trade Eseguiti (in %)")
-
-    simplified_table = df_closed[['Close Date', 'Symbol', 'Action', 'Profit']].copy()
-    simplified_table['Profit %'] = (simplified_table['Profit'] / starting_equity * 100).round(2)
-    simplified_table = simplified_table[['Close Date', 'Symbol', 'Action', 'Profit %']]
+    # Tabella trade chiusi
+    st.subheader("🧾 Trade Chiusi (in %)")
+    closed_table = df_closed[['Close Date', 'Symbol', 'Action', 'Profit']].copy()
+    closed_table['Profit %'] = (closed_table['Profit'] / starting_equity * 100).round(2)
+    closed_table = closed_table[['Close Date', 'Symbol', 'Action', 'Profit %']]
 
     def color_profit(val):
         color = 'green' if val > 0 else 'red' if val < 0 else 'black'
         return f'color: {color}'
 
-    styled_table = simplified_table.style.applymap(color_profit, subset=['Profit %'])
-    st.dataframe(styled_table)
+    styled_closed = closed_table.style.applymap(color_profit, subset=['Profit %'])
+    st.dataframe(styled_closed)
+
+    # Tabella operazioni aperte
+    if not df_open.empty:
+        st.subheader("📌 Operazioni Aperte (non chiuse)")
+        open_table = df_open[['Open Date', 'Symbol', 'Action', 'Profit']].copy()
+        open_table['Profit %'] = (open_table['Profit'] / starting_equity * 100).round(2)
+        open_table = open_table[['Open Date', 'Symbol', 'Action', 'Profit %']]
+        styled_open = open_table.style.applymap(color_profit, subset=['Profit %'])
+        st.dataframe(styled_open)
+
+    # Esportazione CSV
+    st.subheader("⬇️ Esporta dati")
+    export_df = closed_table.copy()
+    csv = export_df.to_csv(index=False).encode('utf-8')
+    st.download_button("Scarica Trade Chiusi in CSV", data=csv, file_name="trade_chiusi.csv", mime="text/csv")
 
 else:
     st.info("Carica un file CSV per iniziare.")
