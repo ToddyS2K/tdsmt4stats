@@ -9,14 +9,13 @@ import os
 
 st.title("Analisi conto MT4 (Profitto in percentuale)")
 
-# Inserimento capitale iniziale
+# Capitale iniziale
 starting_equity = st.number_input("Inserisci il capitale iniziale (€)", min_value=1.0, value=1000.0)
 
 if starting_equity <= 0:
     st.error("⚠️ Inserisci un capitale iniziale maggiore di 0.")
     st.stop()
 
-# Caricamento CSV
 uploaded_file = st.file_uploader("Carica il file CSV esportato da Myfxbook", type=["csv"])
 
 if uploaded_file is not None:
@@ -42,7 +41,6 @@ if uploaded_file is not None:
 
     # Statistiche
     st.subheader("📈 Statistiche del Trading")
-
     total_trades = len(df_closed)
     winning_trades = df_closed[df_closed['Profit'] > 0]
     losing_trades = df_closed[df_closed['Profit'] < 0]
@@ -68,7 +66,7 @@ if uploaded_file is not None:
     for key, value in stats.items():
         st.write(f"**{key}:** {value}")
 
-    # Interpolazione giornaliera
+    # Interpolazione Equity/Drawdown giornaliero
     daily_data = df_closed[['Close Date', 'Equity %', 'Drawdown %']].copy()
     daily_data = (
         daily_data.groupby('Close Date').last()
@@ -90,7 +88,6 @@ if uploaded_file is not None:
     fig1.tight_layout()
     st.pyplot(fig1)
 
-    # Salvataggio grafico equity temporaneo
     temp_eq_path = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
     fig1.savefig(temp_eq_path.name)
 
@@ -107,11 +104,10 @@ if uploaded_file is not None:
     fig2.tight_layout()
     st.pyplot(fig2)
 
-    # Salvataggio grafico drawdown temporaneo
     temp_dd_path = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
     fig2.savefig(temp_dd_path.name)
 
-    # Tabella trade chiusi
+    # Tabella trade
     st.subheader("🧾 Trade Chiusi (in %)")
     closed_table = df_closed[['Close Date', 'Symbol', 'Action', 'Profit']].copy()
     closed_table['Profit %'] = (closed_table['Profit'] / starting_equity * 100).round(2)
@@ -129,7 +125,7 @@ if uploaded_file is not None:
     styled_closed = closed_table.style.applymap(color_profit, subset=['Profit %'])
     st.dataframe(styled_closed)
 
-    # Generazione PDF
+    # Funzione per PDF
     def generate_pdf(stats, table, equity_img, drawdown_img):
         pdf = FPDF()
         pdf.add_page()
@@ -158,7 +154,9 @@ if uploaded_file is not None:
         pdf.cell(200, 10, "Trade Chiusi", ln=True)
         pdf.set_font("Arial", size=9)
         for _, row in table.iterrows():
-            pdf.cell(200, 6, f"{row['Close Date'].date()} | {row['Symbol']} | {row['Action']} | €{row['Profit']:.2f} | {row['Profit %']}%", ln=True)
+            line = f"{row['Close Date'].date()} | {row['Symbol']} | {row['Action']} | EUR {row['Profit']:.2f} | {row['Profit %']:.2f}%"
+            safe_line = line.encode('latin1', 'replace').decode('latin1')
+            pdf.cell(200, 6, safe_line, ln=True)
 
         pdf_bytes = pdf.output(dest='S').encode('latin1')
         return BytesIO(pdf_bytes)
@@ -172,7 +170,6 @@ if uploaded_file is not None:
         mime="application/pdf"
     )
 
-    # Pulizia file temporanei
     os.remove(temp_eq_path.name)
     os.remove(temp_dd_path.name)
 
