@@ -108,7 +108,7 @@ if uploaded_file is not None:
     fig2.savefig(temp_dd_path.name)
 
     # Tabella con solo Profit %
-    st.subheader("🧾 Trade Chiusi (in %)")
+    st.markdown("### 🧾 Trade Chiusi (in %)")
     closed_table = df_closed[['Close Date', 'Symbol', 'Action', 'Profit']].copy()
     closed_table['Profit %'] = (closed_table['Profit'] / starting_equity * 100).round(2)
     closed_table = closed_table[['Close Date', 'Symbol', 'Action', 'Profit %']]
@@ -122,9 +122,9 @@ if uploaded_file is not None:
             return ''
 
     styled_closed = closed_table.style.applymap(color_profit, subset=['Profit %'])
-    st.dataframe(styled_closed)
+    st.dataframe(styled_closed, use_container_width=True)
 
-    # PDF con solo Profit %
+    # PDF ben formattato
     def generate_pdf(stats, table, equity_img, drawdown_img):
         pdf = FPDF()
         pdf.add_page()
@@ -144,19 +144,38 @@ if uploaded_file is not None:
         pdf.image(equity_img, w=180)
         pdf.ln(5)
 
-        pdf.set_font("Arial", 'B', 12)
         pdf.cell(200, 10, "Drawdown", ln=True)
         pdf.image(drawdown_img, w=180)
         pdf.ln(5)
 
+        # Tabella dei Trade Chiusi
         pdf.set_font("Arial", 'B', 12)
         pdf.cell(200, 10, "Trade Chiusi", ln=True)
-        pdf.set_font("Arial", size=9)
-        for _, row in table.iterrows():
-            line = f"{row['Close Date'].date()} | {row['Symbol']} | {row['Action']} | {row['Profit %']:.2f}%"
-            safe_line = line.encode('latin1', 'replace').decode('latin1')
-            pdf.cell(200, 6, safe_line, ln=True)
+        pdf.set_font("Arial", 'B', 10)
+        col_widths = [40, 40, 30, 30]
+        headers = ['Data Chiusura', 'Simbolo', 'Azione', 'Profitto %']
+        for i, header in enumerate(headers):
+            pdf.set_fill_color(220, 220, 220)
+            pdf.cell(col_widths[i], 8, header, border=1, align='C', fill=True)
+        pdf.ln()
 
+        pdf.set_font("Arial", size=10)
+        for _, row in table.iterrows():
+            profit_percent = row['Profit %']
+            if profit_percent > 0:
+                pdf.set_text_color(0, 128, 0)  # Verde
+            elif profit_percent < 0:
+                pdf.set_text_color(255, 0, 0)  # Rosso
+            else:
+                pdf.set_text_color(0, 0, 0)    # Nero
+
+            pdf.cell(col_widths[0], 8, str(row['Close Date'].date()), border=1)
+            pdf.cell(col_widths[1], 8, str(row['Symbol']), border=1)
+            pdf.cell(col_widths[2], 8, str(row['Action']), border=1)
+            pdf.cell(col_widths[3], 8, f"{profit_percent:.2f}%", border=1, align='R')
+            pdf.ln()
+
+        pdf.set_text_color(0, 0, 0)
         pdf_bytes = pdf.output(dest='S').encode('latin1')
         return BytesIO(pdf_bytes)
 
