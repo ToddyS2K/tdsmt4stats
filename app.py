@@ -8,30 +8,33 @@ st.title("Analisi conto MT4 (Profitto in percentuale)")
 # Inserimento capitale iniziale
 starting_equity = st.number_input("Inserisci il capitale iniziale (€)", min_value=1.0, value=1000.0)
 
+if starting_equity <= 0:
+    st.error("⚠️ Inserisci un capitale iniziale maggiore di 0.")
+    st.stop()
+
 # Upload del file CSV
 uploaded_file = st.file_uploader("Carica il file CSV esportato da Myfxbook", type=["csv"])
 
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
 
-    # Parsing date
+    # Parsing delle date
     df['Open Date'] = pd.to_datetime(df['Open Date'], dayfirst=True, errors='coerce')
     df['Close Date'] = pd.to_datetime(df['Close Date'], dayfirst=True, errors='coerce')
     df = df.sort_values('Close Date').reset_index(drop=True)
 
-    # Calcoli principali
+    # Calcolo equity e drawdown
     df['Profit'] = pd.to_numeric(df['Profit'], errors='coerce')
-    df['Profit %'] = df['Profit'] / starting_equity * 100
-    df['Equity %'] = df['Profit %'].cumsum()
-
-    # Calcolo Drawdown %
-    df['High Watermark'] = df['Equity %'].cummax()
-    df['Drawdown %'] = df['Equity %'] - df['High Watermark']
+    df['Equity'] = starting_equity + df['Profit'].cumsum()
+    df['Equity %'] = (df['Equity'] - starting_equity) / starting_equity * 100
+    df['High Watermark'] = df['Equity'].cummax()
+    df['Drawdown'] = df['Equity'] - df['High Watermark']
+    df['Drawdown %'] = df['Drawdown'] / df['High Watermark'] * 100
     max_drawdown = df['Drawdown %'].min()
 
     st.subheader(f"📉 Max Drawdown: {max_drawdown:.2f}%")
 
-    # === STATISTICHE EXTRA ===
+    # Statistiche extra
     st.subheader("📈 Statistiche del Trading")
 
     total_trades = len(df)
@@ -39,8 +42,8 @@ if uploaded_file is not None:
     losing_trades = df[df['Profit'] < 0]
 
     win_rate = len(winning_trades) / total_trades * 100 if total_trades > 0 else 0
-    avg_profit_per_trade = df['Profit %'].mean()
-    total_profit = df['Profit %'].sum()
+    avg_profit_per_trade = df['Equity %'].diff().mean()
+    total_profit = df['Equity %'].iloc[-1]
 
     gross_profit = winning_trades['Profit'].sum()
     gross_loss = -losing_trades['Profit'].sum()
@@ -59,7 +62,7 @@ if uploaded_file is not None:
     for key, value in stats.items():
         st.write(f"**{key}:** {value}")
 
-    # === Interpolazione Equity e Drawdown giornalieri ===
+    # Interpolazione giornaliera
     daily_data = df[['Close Date', 'Equity %', 'Drawdown %']].copy()
     daily_data = (
         daily_data.groupby('Close Date').last()
@@ -68,7 +71,7 @@ if uploaded_file is not None:
         .reset_index()
     )
 
-    # === Grafico Equity % ===
+    # Grafico Equity %
     st.subheader("📊 Equity Curve (%)")
     fig1, ax1 = plt.subplots()
     ax1.plot(daily_data['Close Date'], daily_data['Equity %'], linewidth=2)
@@ -81,7 +84,7 @@ if uploaded_file is not None:
     fig1.tight_layout()
     st.pyplot(fig1)
 
-    # === Grafico Drawdown % ===
+    # Grafico Drawdown %
     st.subheader("📊 Drawdown (%)")
     fig2, ax2 = plt.subplots()
     ax2.plot(daily_data['Close Date'], daily_data['Drawdown %'], color='red', linewidth=2)
@@ -94,11 +97,19 @@ if uploaded_file is not None:
     fig2.tight_layout()
     st.pyplot(fig2)
 
-    # Tabella dei trade semplificata
+    # Tabella colorata dei trade
     st.subheader("🧾 Trade Eseguiti (in %)")
-    simplified_table = df[['Close Date', 'Symbol', 'Action', 'Profit %']].copy()
-    simplified_table['Profit %'] = simplified_table['Profit %'].map("{:.2f}%".format)
-    st.dataframe(simplified_table)
+
+    simplified_table = df[['Close Date', 'Symbol', 'Action', 'Profit']].copy()
+    simplified_table['Profit %'] = (simplified_table['Profit'] / starting_equity * 100).round(2)
+    simplified_table = simplified_table[['Close Date', 'Symbol', 'Action', 'Profit %']]
+
+    def color_profit(val):
+        color = 'green' if val > 0 else 'red' if val < 0 else 'black'
+        return f'color: {color}'
+
+    styled_table = simplified_table.style.applymap(color_profit, subset=['Profit %'])
+    st.dataframe(styled_table)
 
 else:
     st.info("Carica un file CSV per iniziare.")
