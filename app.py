@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 
 st.title("Analisi conto MT4 (Profitto in percentuale)")
 
@@ -26,7 +27,6 @@ if uploaded_file is not None:
     # Calcolo Drawdown
     df['High Watermark'] = df['Equity %'].cummax()
     df['Drawdown %'] = df['Equity %'] - df['High Watermark']
-
     max_drawdown = df['Drawdown %'].min()
 
     st.subheader(f"Max Drawdown: {max_drawdown:.2f}%")
@@ -38,6 +38,12 @@ if uploaded_file is not None:
     ax1.set_xlabel("Data")
     ax1.set_ylabel("Equity (%)")
     ax1.grid(True)
+
+    # Format x-axis
+    ax1.xaxis.set_major_locator(mdates.AutoDateLocator())
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m'))
+    plt.setp(ax1.get_xticklabels(), rotation=45, ha="right")
+    fig1.tight_layout()
     st.pyplot(fig1)
 
     # === Grafico Drawdown % ===
@@ -47,6 +53,12 @@ if uploaded_file is not None:
     ax2.set_xlabel("Data")
     ax2.set_ylabel("Drawdown (%)")
     ax2.grid(True)
+
+    # Format x-axis
+    ax2.xaxis.set_major_locator(mdates.AutoDateLocator())
+    ax2.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m'))
+    plt.setp(ax2.get_xticklabels(), rotation=45, ha="right")
+    fig2.tight_layout()
     st.pyplot(fig2)
 
     # Tabella semplificata
