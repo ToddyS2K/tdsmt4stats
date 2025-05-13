@@ -107,12 +107,11 @@ if uploaded_file is not None:
     temp_dd_path = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
     fig2.savefig(temp_dd_path.name)
 
-    # Tabella trade
+    # Tabella con solo Profit %
     st.subheader("🧾 Trade Chiusi (in %)")
     closed_table = df_closed[['Close Date', 'Symbol', 'Action', 'Profit']].copy()
     closed_table['Profit %'] = (closed_table['Profit'] / starting_equity * 100).round(2)
-    closed_table['Profit'] = closed_table['Profit'].round(2)
-    closed_table = closed_table[['Close Date', 'Symbol', 'Action', 'Profit', 'Profit %']]
+    closed_table = closed_table[['Close Date', 'Symbol', 'Action', 'Profit %']]
 
     def color_profit(val):
         if val > 0:
@@ -125,7 +124,7 @@ if uploaded_file is not None:
     styled_closed = closed_table.style.applymap(color_profit, subset=['Profit %'])
     st.dataframe(styled_closed)
 
-    # Funzione per PDF
+    # PDF con solo Profit %
     def generate_pdf(stats, table, equity_img, drawdown_img):
         pdf = FPDF()
         pdf.add_page()
@@ -154,7 +153,7 @@ if uploaded_file is not None:
         pdf.cell(200, 10, "Trade Chiusi", ln=True)
         pdf.set_font("Arial", size=9)
         for _, row in table.iterrows():
-            line = f"{row['Close Date'].date()} | {row['Symbol']} | {row['Action']} | EUR {row['Profit']:.2f} | {row['Profit %']:.2f}%"
+            line = f"{row['Close Date'].date()} | {row['Symbol']} | {row['Action']} | {row['Profit %']:.2f}%"
             safe_line = line.encode('latin1', 'replace').decode('latin1')
             pdf.cell(200, 6, safe_line, ln=True)
 
