@@ -2,7 +2,10 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 
-st.title("Analisi conto MT4 (Myfxbook CSV)")
+st.title("Analisi conto MT4 (Profitto in percentuale)")
+
+# Inserimento del capitale iniziale
+starting_equity = st.number_input("Inserisci il capitale iniziale (€)", min_value=1.0, value=1000.0)
 
 uploaded_file = st.file_uploader("Carica il file CSV esportato da Myfxbook", type=["csv"])
 
@@ -16,31 +19,36 @@ if uploaded_file is not None:
     # Ordina per data di chiusura
     df = df.sort_values('Close Date').reset_index(drop=True)
 
-    # Calcolo equity cumulativa
+    # Profitto in € e % per ogni trade
     df['Profit'] = pd.to_numeric(df['Profit'], errors='coerce')
-    df['Equity'] = df['Profit'].cumsum()
+    df['Profit %'] = df['Profit'] / starting_equity * 100
 
-    # Calcolo drawdown
-    df['High Watermark'] = df['Equity'].cummax()
-    df['Drawdown'] = df['Equity'] - df['High Watermark']
-    df['Drawdown %'] = df['Drawdown'] / df['High Watermark'] * 100
+    # Equity cumulativa in percentuale
+    df['Equity %'] = df['Profit %'].cumsum()
+
+    # Calcolo drawdown in percentuale
+    df['High Watermark'] = df['Equity %'].cummax()
+    df['Drawdown'] = df['Equity %'] - df['High Watermark']
+    df['Drawdown %'] = df['Drawdown']  # già in percentuale
 
     max_drawdown = df['Drawdown %'].min()
 
     st.subheader(f"Max Drawdown: {max_drawdown:.2f}%")
 
-    # Grafico Equity
-    st.subheader("Equity Curve")
+    # Grafico dell’equity in percentuale
+    st.subheader("Equity Curve (%)")
     fig, ax = plt.subplots()
-    ax.plot(df['Close Date'], df['Equity'], label='Equity')
+    ax.plot(df['Close Date'], df['Equity %'], label='Equity %')
     ax.set_xlabel("Data")
-    ax.set_ylabel("Equity (€)")
+    ax.set_ylabel("Equity (%)")
     ax.legend()
     st.pyplot(fig)
 
-    # Tabella dei trade
-    st.subheader("Trade Eseguiti")
-    st.dataframe(df[['Ticket', 'Open Date', 'Close Date', 'Symbol', 'Action', 'Units/Lots', 'Open Price', 'Close Price', 'Profit']])
+    # Tabella semplificata dei trade
+    st.subheader("Trade Eseguiti (in %)")
+    simplified_table = df[['Close Date', 'Symbol', 'Action', 'Profit %']]
+    simplified_table['Profit %'] = simplified_table['Profit %'].map("{:.2f}%".format)
+    st.dataframe(simplified_table)
 
 else:
     st.info("Carica un file CSV per iniziare.")
