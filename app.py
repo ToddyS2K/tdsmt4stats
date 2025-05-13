@@ -28,6 +28,7 @@ if uploaded_file is not None:
     # Solo trade chiusi
     df_closed = df[df['Close Date'].notna()].sort_values('Close Date').reset_index(drop=True)
     df_closed['Profit'] = pd.to_numeric(df_closed['Profit'], errors='coerce').round(2)
+    df_closed['Pips'] = pd.to_numeric(df_closed['Pips'], errors='coerce').round(1)
 
     # Equity e Drawdown
     df_closed['Equity'] = starting_equity + df_closed['Profit'].cumsum()
@@ -54,6 +55,8 @@ if uploaded_file is not None:
     profit_factor = gross_profit / gross_loss if gross_loss != 0 else float('inf')
     win_loss_ratio = len(winning_trades) / len(losing_trades) if len(losing_trades) > 0 else float('inf')
 
+    avg_pips = df_closed['Pips'].mean() if total_trades > 0 else 0
+
     stats = {
         "Totale trade eseguiti (chiusi)": total_trades,
         "Win rate (%)": f"{win_rate:.2f}%",
@@ -61,7 +64,8 @@ if uploaded_file is not None:
         "Profitto totale (%)": f"{total_profit:.2f}%",
         "Profit factor": f"{profit_factor:.2f}",
         "Rapporto Win/Loss": f"{win_loss_ratio:.2f}",
-        "Max Drawdown (%)": f"{max_drawdown:.2f}%"
+        "Max Drawdown (%)": f"{max_drawdown:.2f}%",
+        "Pips medi per trade": f"{avg_pips:.1f}"
     }
 
     for key, value in stats.items():
@@ -108,11 +112,11 @@ if uploaded_file is not None:
     temp_dd_path = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
     fig2.savefig(temp_dd_path.name)
 
-    # Tabella con solo Profit %
-    st.markdown("### 🧾 Trade Chiusi (in %)")
-    closed_table = df_closed[['Close Date', 'Symbol', 'Action', 'Profit']].copy()
+    # Tabella con Profit % e Pips
+    st.markdown("### 🧾 Trade Chiusi (in % e Pips)")
+    closed_table = df_closed[['Close Date', 'Symbol', 'Action', 'Profit', 'Pips']].copy()
     closed_table['Profit %'] = (closed_table['Profit'] / starting_equity * 100).round(2)
-    closed_table = closed_table[['Close Date', 'Symbol', 'Action', 'Profit %']]
+    closed_table = closed_table[['Close Date', 'Symbol', 'Action', 'Profit %', 'Pips']]
 
     def color_profit(val):
         if val > 0:
@@ -125,7 +129,7 @@ if uploaded_file is not None:
     styled_closed = closed_table.style.applymap(color_profit, subset=['Profit %'])
     st.dataframe(styled_closed, use_container_width=True)
 
-    # PDF con statistiche in tabella
+    # PDF con statistica + Pips
     def generate_pdf(stats, table, equity_img, drawdown_img):
         pdf = FPDF()
         pdf.add_page()
@@ -133,7 +137,6 @@ if uploaded_file is not None:
         pdf.cell(200, 10, "Report MT4 - Trade Chiusi", ln=True, align='C')
         pdf.ln(8)
 
-        # Tabella Statistiche
         pdf.set_font("Arial", 'B', 12)
         pdf.cell(200, 10, "Statistiche", ln=True)
         pdf.set_font("Arial", size=10)
@@ -161,12 +164,11 @@ if uploaded_file is not None:
         pdf.image(drawdown_img, w=180)
         pdf.ln(5)
 
-        # Tabella Trade Chiusi
         pdf.set_font("Arial", 'B', 12)
         pdf.cell(200, 10, "Trade Chiusi", ln=True)
         pdf.set_font("Arial", 'B', 10)
-        col_widths = [40, 40, 30, 30]
-        headers = ['Data Chiusura', 'Simbolo', 'Azione', 'Profitto %']
+        col_widths = [35, 35, 25, 35, 30]
+        headers = ['Data Chiusura', 'Simbolo', 'Azione', 'Profitto %', 'Pips']
         for i, header in enumerate(headers):
             pdf.set_fill_color(220, 220, 220)
             pdf.cell(col_widths[i], 8, header, border=1, align='C', fill=True)
@@ -175,6 +177,7 @@ if uploaded_file is not None:
         pdf.set_font("Arial", size=10)
         for _, row in table.iterrows():
             profit_percent = row['Profit %']
+            pips = row['Pips']
             if profit_percent > 0:
                 pdf.set_text_color(0, 128, 0)
             elif profit_percent < 0:
@@ -186,6 +189,7 @@ if uploaded_file is not None:
             pdf.cell(col_widths[1], 8, str(row['Symbol']), border=1)
             pdf.cell(col_widths[2], 8, str(row['Action']), border=1)
             pdf.cell(col_widths[3], 8, f"{profit_percent:.2f}%", border=1, align='R')
+            pdf.cell(col_widths[4], 8, f"{pips:.1f}", border=1, align='R')
             pdf.ln()
 
         pdf.set_text_color(0, 0, 0)
