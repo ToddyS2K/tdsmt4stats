@@ -15,18 +15,60 @@ if starting_equity <= 0:
     st.error("⚠️ Inserisci un capitale iniziale maggiore di 0.")
     st.stop()
 
-uploaded_file = st.file_uploader("Carica il file CSV esportato da Myfxbook", type=["csv"])
+uploaded_file = st.file_uploader("Carica il file CSV o HTML esportato da Myfxbook o MT4", type=["csv", "htm"])
 
 if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
+    if uploaded_file.name.endswith(".csv"):
+        df = pd.read_csv(uploaded_file)
 
-    df['Open Date'] = pd.to_datetime(df['Open Date'], dayfirst=True, errors='coerce')
-    df['Close Date'] = pd.to_datetime(df['Close Date'], dayfirst=True, errors='coerce')
+        df['Open Date'] = pd.to_datetime(df['Open Date'], dayfirst=True, errors='coerce')
+        df['Close Date'] = pd.to_datetime(df['Close Date'], dayfirst=True, errors='coerce')
+        df_closed = df[df['Close Date'].notna()].sort_values('Close Date').reset_index(drop=True)
+        df_closed['Profit'] = pd.to_numeric(df_closed['Profit'], errors='coerce').round(2)
+        df_closed['Pips'] = pd.to_numeric(df_closed['Pips'], errors='coerce').round(1)
 
-    df_closed = df[df['Close Date'].notna()].sort_values('Close Date').reset_index(drop=True)
-    df_closed['Profit'] = pd.to_numeric(df_closed['Profit'], errors='coerce').round(2)
-    df_closed['Pips'] = pd.to_numeric(df_closed['Pips'], errors='coerce').round(1)
+    elif uploaded_file.name.endswith(".htm"):
+        tables = pd.read_html(uploaded_file, encoding="windows-1252")
+        target_table = None
+        for tbl in tables:
+            if {"Type", "Open Time", "Close Time", "Profit", "Item"}.issubset(tbl.columns):
+                target_table = tbl
+                break
 
+        if target_table is None:
+            st.error("❌ Nessuna tabella valida trovata nel file HTML.")
+            st.stop()
+
+        df = target_table.copy()
+        df = df[df["Type"].str.lower().isin(["buy", "sell"])]
+
+        df["Open Date"] = pd.to_datetime(df["Open Time"], errors="coerce")
+        df["Close Date"] = pd.to_datetime(df["Close Time"], errors="coerce")
+        df["Action"] = df["Type"].str.lower()
+        df["Symbol"] = df["Item"].str.lower()
+        df["Profit"] = pd.to_numeric(df["Profit"], errors="coerce")
+        df["Open Price"] = pd.to_numeric(df["Price"], errors="coerce")
+        df["Close Price"] = pd.to_numeric(df["Close Price"], errors="coerce")
+
+        def calc_pips(row):
+            if pd.isna(row["Open Price"]) or pd.isna(row["Close Price"]):
+                return None
+            symbol = row["Symbol"]
+            if "jpy" in symbol:
+                multiplier = 100
+            elif "btc" in symbol:
+                multiplier = 1
+            else:
+                multiplier = 10000
+            if row["Action"] == "buy":
+                return (row["Close Price"] - row["Open Price"]) * multiplier
+            else:
+                return (row["Open Price"] - row["Close Price"]) * multiplier
+
+        df["Pips"] = df.apply(calc_pips, axis=1).round(1)
+        df_closed = df[["Open Date", "Close Date", "Action", "Symbol", "Profit", "Pips"]].copy()
+
+    # Calcolo Equity e Drawdown
     df_closed['Equity'] = starting_equity + df_closed['Profit'].cumsum()
     df_closed['Equity %'] = (df_closed['Equity'] - starting_equity) / starting_equity * 100
     df_closed['High Watermark'] = df_closed['Equity'].cummax()
@@ -106,12 +148,9 @@ if uploaded_file is not None:
 
     st.markdown("### 🧾 Trade Chiusi (in % e Pips)")
     closed_table = df_closed[['Close Date', 'Symbol', 'Action', 'Profit', 'Pips']].copy()
-
-    # Formattazione
-    closed_table['Close Date'] = closed_table['Close Date'].dt.strftime('%d-%m-%Y')
     closed_table['Profit %'] = (closed_table['Profit'] / starting_equity * 100).map(lambda x: f"{x:.2f}")
+    closed_table['Close Date'] = closed_table['Close Date'].dt.strftime('%d-%m-%Y')
     closed_table['Pips'] = closed_table['Pips'].map(lambda x: f"{x:.1f}".rstrip('0').rstrip('.') if pd.notnull(x) else '')
-
     closed_table = closed_table[['Close Date', 'Symbol', 'Action', 'Profit %', 'Pips']]
 
     def color_profit(val):
@@ -210,4 +249,4 @@ if uploaded_file is not None:
     os.remove(temp_dd_path.name)
 
 else:
-    st.info("Carica un file CSV per iniziare.")
+    st.info("Carica un file CSV o HTML per iniziare.")
