@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-from io import BytesIO
+from io import BytesIO, StringIO
 from fpdf import FPDF
 import tempfile
 import os
@@ -28,7 +28,9 @@ if uploaded_file is not None:
         df_closed['Pips'] = pd.to_numeric(df_closed['Pips'], errors='coerce').round(1)
 
     elif uploaded_file.name.endswith(".htm"):
-        tables = pd.read_html(uploaded_file, encoding="windows-1252")
+        html_text = uploaded_file.read().decode("windows-1252")
+        tables = pd.read_html(StringIO(html_text))
+
         target_table = None
         for tbl in tables:
             if {"Type", "Open Time", "Close Time", "Profit", "Item"}.issubset(tbl.columns):
@@ -68,7 +70,6 @@ if uploaded_file is not None:
         df["Pips"] = df.apply(calc_pips, axis=1).round(1)
         df_closed = df[["Open Date", "Close Date", "Action", "Symbol", "Profit", "Pips"]].copy()
 
-    # Calcolo Equity e Drawdown
     df_closed['Equity'] = starting_equity + df_closed['Profit'].cumsum()
     df_closed['Equity %'] = (df_closed['Equity'] - starting_equity) / starting_equity * 100
     df_closed['High Watermark'] = df_closed['Equity'].cummax()
