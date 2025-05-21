@@ -33,13 +33,14 @@ if uploaded_file is not None:
             headers = [th.text.strip().replace('\xa0', ' ') for th in table.find_all('th')]
             st.write(f"Tabella {idx} headers:", headers)  # DEBUG visivo
 
-            # Controlla solo che le colonne chiave siano presenti (più tollerante)
+            # Controlla che almeno 5 delle 6 colonne chiave siano presenti
             match_count = sum(col in headers for col in ['Open Time', 'Close Time', 'Type', 'Size', 'Item', 'Profit'])
-            if match_count >= 5:  # almeno 5 su 6
+            if match_count >= 5:
                 rows = []
                 for row in table.find_all('tr')[1:]:
                     cells = [td.get_text(strip=True) for td in row.find_all('td')]
-                    if cells and len(cells) == len(headers):
+                    # Accetta righe con almeno 5 celle (salta righe tipo saldo, deposito, intestazioni duplicate)
+                    if len(cells) >= 5 and 'Profit' in headers:
                         rows.append(cells)
                 if rows:
                     if best_table is None or len(rows) > len(best_table[1]):
@@ -50,7 +51,7 @@ if uploaded_file is not None:
             st.stop()
 
         headers, rows = best_table
-        df = pd.DataFrame(rows, columns=headers)
+        df = pd.DataFrame(rows, columns=headers[:len(rows[0])])  # adatta intestazioni se alcune colonne sono in eccesso
         from pandas.io.parsers import ParserBase
         df.columns = ParserBase({'names': df.columns})._maybe_dedup_names(df.columns)
 
