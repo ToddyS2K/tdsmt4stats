@@ -104,6 +104,7 @@ if uploaded_file is not None:
 
     # Interpolazione Equity/Drawdown giornaliero
     daily_data = df_closed[['Close Date', 'Equity %', 'Drawdown %']].copy()
+    daily_data['Close Date'] = pd.to_datetime(daily_data['Close Date'], dayfirst=True, errors='coerce')
     daily_data = (
         daily_data.groupby('Close Date').last()
         .resample('D')
