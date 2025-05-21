@@ -21,90 +21,68 @@ uploaded_file = st.file_uploader("Carica il file CSV di Myfxbook o HTML da MT4",
 if uploaded_file is not None:
     if uploaded_file.name.endswith('.csv'):
         df = pd.read_csv(uploaded_file)
+
     elif uploaded_file.name.endswith(('.htm', '.html')):
         from bs4 import BeautifulSoup
-
         soup = BeautifulSoup(uploaded_file, 'html.parser')
         tables = soup.find_all('table')
         df = None
+
+        required_columns = {'Open Time', 'Close Time', 'Type', 'Size', 'Item', 'Profit'}
+
+        best_table = None
         for table in tables:
             headers = [th.get_text(strip=True) for th in table.find_all('th')]
-            if {'Open Time', 'Close Time', 'Type', 'Size', 'Item', 'Profit'}.issubset(set(headers)):
+            if required_columns.issubset(set(headers)):
                 rows = []
                 for row in table.find_all('tr')[1:]:
                     cells = [td.get_text(strip=True) for td in row.find_all('td')]
-                    if cells:
+                    if cells and len(cells) == len(headers):
                         rows.append(cells)
-                df = pd.DataFrame(rows, columns=headers)
-                from pandas.io.parsers import ParserBase
-                df.columns = ParserBase({'names': df.columns})._maybe_dedup_names(df.columns)
-                df.rename(columns={
-                    'Open Time': 'Open Date',
-                    'Close Time': 'Close Date',
-                    'Type': 'Action',
-                    'Item': 'Symbol',
-                    'Size': 'Lots'
-                }, inplace=True)
-                if 'Price' in df.columns and 'Price.1' in df.columns:
-                    df['Open Price'] = pd.to_numeric(df['Price'], errors='coerce')
-                    df['Close Price'] = pd.to_numeric(df['Price.1'], errors='coerce')
-                    df['Pips'] = ((df['Close Price'] - df['Open Price']) * 10000).round(1)
-                else:
-                    df['Pips'] = 0.0
-                break
-                from pandas.io.parsers import ParserBase
-                df.columns = ParserBase({'names': df.columns})._maybe_dedup_names(df.columns)
-            headers = [th.get_text(strip=True) for th in table.find_all('th')]
-            if {'Open Time', 'Close Time', 'Type', 'Size', 'Item', 'Profit'}.issubset(set(headers)):
-                rows = []
-                for row in table.find_all('tr')[1:]:
-                    cells = [td.get_text(strip=True) for td in row.find_all('td')]
-                    if cells:
-                        rows.append(cells)
-                df = pd.DataFrame(rows, columns=headers)
-                from pandas.io.parsers import ParserBase
-                df.columns = ParserBase({'names': df.columns})._maybe_dedup_names(df.columns)
-                df.rename(columns={
-                'Open Time': 'Open Date',
-                'Close Time': 'Close Date',
-                'Type': 'Action',
-                'Item': 'Symbol',
-                'Size': 'Lots'
-            }, inplace=True)
-            if df is not None:
-                if 'Price' in df.columns and 'Price.1' in df.columns:
-                    df['Open Price'] = pd.to_numeric(df['Price'], errors='coerce')
-                    df['Close Price'] = pd.to_numeric(df['Price.1'], errors='coerce')
-                    df['Pips'] = ((df['Close Price'] - df['Open Price']) * 10000).round(1)
-                else:
-                    df['Pips'] = 0.0
-        if df is None:
-            st.error("Non è stato possibile trovare la tabella dei trade chiusi nel file HTML.")
+                if rows:
+                    if best_table is None or len(rows) > len(best_table[1]):
+                        best_table = (headers, rows)
+
+        if best_table is None:
+            st.error("❌ Nessuna tabella valida trovata nel file HTML.")
             st.stop()
+
+        headers, rows = best_table
+        df = pd.DataFrame(rows, columns=headers)
+        from pandas.io.parsers import ParserBase
+        df.columns = ParserBase({'names': df.columns})._maybe_dedup_names(df.columns)
+
         df.rename(columns={
             'Open Time': 'Open Date',
             'Close Time': 'Close Date',
-            'Type': 'Action'
+            'Type': 'Action',
+            'Item': 'Symbol',
+            'Size': 'Lots'
         }, inplace=True)
+
+        if 'Price' in df.columns and 'Price.1' in df.columns:
+            df['Open Price'] = pd.to_numeric(df['Price'], errors='coerce')
+            df['Close Price'] = pd.to_numeric(df['Price.1'], errors='coerce')
+            df['Pips'] = ((df['Close Price'] - df['Open Price']) * 10000).round(1)
+        else:
+            df['Pips'] = 0.0
+
     else:
-        st.error("Formato file non supportato. Carica un file CSV o HTML.")
+        st.error("❌ Formato file non supportato. Carica un file CSV o HTML.")
         st.stop()
 
-    # Parsing date
     df['Open Date'] = pd.to_datetime(df['Open Date'], dayfirst=True, errors='coerce')
     df['Close Date'] = pd.to_datetime(df['Close Date'], dayfirst=True, errors='coerce')
 
-    # Solo trade chiusi
-    df['Open Date'] = pd.to_datetime(df['Open Date'], dayfirst=True, errors='coerce')
-    df['Close Date'] = pd.to_datetime(df['Close Date'], dayfirst=True, errors='coerce')
+    if df['Open Date'].isna().all() or df['Close Date'].isna().all():
+        st.error("❌ Nessuna data valida trovata nei trade.")
+        st.stop()
 
     min_date = df['Open Date'].min()
     max_date = df['Close Date'].max()
 
-    start_date = st.date_input("📅 Data inizio filtro", min_value=min_date.date(), max_value=max_date.date(), value=min_date.date())
-    
-    end_date = st.date_input("📅 Data fine filtro", min_value=min_date.date(), max_value=max_date.date(), value=max_date.date())
-    
+    start_date = st.date_input("🗓️ Data inizio filtro", min_value=min_date.date(), max_value=max_date.date(), value=min_date.date())
+    end_date = st.date_input("🗓️ Data fine filtro", min_value=min_date.date(), max_value=max_date.date(), value=max_date.date())
 
     df = df[(df['Open Date'].dt.date >= start_date) & (df['Open Date'].dt.date <= end_date)]
 
@@ -113,7 +91,6 @@ if uploaded_file is not None:
     df_closed['Profit'] = pd.to_numeric(df_closed['Profit'], errors='coerce').round(2)
     df_closed['Pips'] = pd.to_numeric(df_closed['Pips'], errors='coerce').round(1)
 
-    # Equity e Drawdown
     df_closed['Equity'] = starting_equity + df_closed['Profit'].cumsum()
     df_closed['Equity %'] = (df_closed['Equity'] - starting_equity) / starting_equity * 100
     df_closed['High Watermark'] = df_closed['Equity'].cummax()
@@ -123,7 +100,6 @@ if uploaded_file is not None:
 
     st.subheader(f"📉 Max Drawdown: {max_drawdown:.2f}%")
 
-    # Statistiche
     st.subheader("📈 Statistiche del Trading")
     total_trades = len(df_closed)
     winning_trades = df_closed[df_closed['Profit'] > 0]
@@ -154,7 +130,6 @@ if uploaded_file is not None:
     for key, value in stats.items():
         st.write(f"**{key}:** {value}")
 
-    # Interpolazione Equity/Drawdown giornaliero
     daily_data = df_closed[['Close Date', 'Equity %', 'Drawdown %']].copy()
     daily_data['Close Date'] = pd.to_datetime(daily_data['Close Date'], dayfirst=True, errors='coerce')
     daily_data = (
@@ -164,7 +139,6 @@ if uploaded_file is not None:
         .reset_index()
     )
 
-    # Grafico Equity
     st.subheader("📊 Equity Curve (%)")
     fig1, ax1 = plt.subplots()
     ax1.plot(daily_data['Close Date'], daily_data['Equity %'], linewidth=2)
@@ -177,10 +151,6 @@ if uploaded_file is not None:
     fig1.tight_layout()
     st.pyplot(fig1)
 
-    temp_eq_path = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-    fig1.savefig(temp_eq_path.name)
-
-    # Grafico Drawdown
     st.subheader("📊 Drawdown (%)")
     fig2, ax2 = plt.subplots()
     ax2.plot(daily_data['Close Date'], daily_data['Drawdown %'], color='red', linewidth=2)
@@ -193,11 +163,6 @@ if uploaded_file is not None:
     fig2.tight_layout()
     st.pyplot(fig2)
 
-    temp_dd_path = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-    fig2.savefig(temp_dd_path.name)
-
-    # Tabella con Profit % e Pips
-    st.markdown("### 🧾 Trade Chiusi (in % e Pips)")
     closed_table = df_closed[['Close Date', 'Symbol', 'Action', 'Profit', 'Pips']].copy()
     closed_table['Profit %'] = (closed_table['Profit'] / starting_equity * 100).round(2)
     closed_table = closed_table[['Close Date', 'Symbol', 'Action', 'Profit %', 'Pips']]
@@ -211,9 +176,9 @@ if uploaded_file is not None:
             return ''
 
     styled_closed = closed_table.style.applymap(color_profit, subset=['Profit %'])
+    st.markdown("### 🧾 Trade Chiusi (in % e Pips)")
     st.dataframe(styled_closed, use_container_width=True)
 
-    # PDF con statistica + Pips
     def generate_pdf(stats, table, equity_img, drawdown_img):
         pdf = FPDF()
         pdf.add_page()
@@ -280,17 +245,26 @@ if uploaded_file is not None:
         pdf_bytes = pdf.output(dest='S').encode('latin1')
         return BytesIO(pdf_bytes)
 
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_eq:
+        fig1.savefig(temp_eq.name)
+        eq_path = temp_eq.name
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_dd:
+        fig2.savefig(temp_dd.name)
+        dd_path = temp_dd.name
+
+    pdf_buffer = generate_pdf(stats, closed_table, eq_path, dd_path)
+
     st.subheader("📄 Esporta PDF")
-    pdf_buffer = generate_pdf(stats, closed_table, temp_eq_path.name, temp_dd_path.name)
     st.download_button(
-        label="📥 Scarica PDF con grafici",
+        label="📅 Scarica PDF con grafici",
         data=pdf_buffer,
         file_name="report_mt4_completo.pdf",
         mime="application/pdf"
     )
 
-    os.remove(temp_eq_path.name)
-    os.remove(temp_dd_path.name)
+    os.remove(eq_path)
+    os.remove(dd_path)
 
 else:
     st.info("Carica un file CSV per iniziare.")
