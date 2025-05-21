@@ -45,7 +45,7 @@ if uploaded_file is not None:
                 'Item': 'Symbol',
                 'Size': 'Lots'
             }, inplace=True)
-            if 'Price' in df.columns and 'Price.1' in df.columns:
+            if df is not None and 'Price' in df.columns and 'Price.1' in df.columns:
                 df['Open Price'] = pd.to_numeric(df['Price'], errors='coerce')
                 df['Close Price'] = pd.to_numeric(df['Price.1'], errors='coerce')
                 df['Pips'] = ((df['Close Price'] - df['Open Price']) * 10000).round(1)
