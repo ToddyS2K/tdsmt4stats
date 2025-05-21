@@ -16,16 +16,46 @@ if starting_equity <= 0:
     st.error("⚠️ Inserisci un capitale iniziale maggiore di 0.")
     st.stop()
 
-uploaded_file = st.file_uploader("Carica il file CSV esportato da Myfxbook", type=["csv"])
+uploaded_file = st.file_uploader("Carica il file CSV di Myfxbook o HTML da MT4", type=["csv", "htm", "html"])
 
 if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
+    if uploaded_file.name.endswith('.csv'):
+        df = pd.read_csv(uploaded_file)
+    elif uploaded_file.name.endswith(('.htm', '.html')):
+        tables = pd.read_html(uploaded_file)
+        df = None
+        for table in tables:
+            if {'Open Time', 'Close Time', 'Symbol', 'Type', 'Lots', 'Profit', 'Pips'}.issubset(table.columns):
+                df = table
+                break
+        if df is None:
+            st.error("Non è stato possibile trovare la tabella dei trade chiusi nel file HTML.")
+            st.stop()
+        df.rename(columns={
+            'Open Time': 'Open Date',
+            'Close Time': 'Close Date',
+            'Type': 'Action'
+        }, inplace=True)
+    else:
+        st.error("Formato file non supportato. Carica un file CSV o HTML.")
+        st.stop()
 
     # Parsing date
     df['Open Date'] = pd.to_datetime(df['Open Date'], dayfirst=True, errors='coerce')
     df['Close Date'] = pd.to_datetime(df['Close Date'], dayfirst=True, errors='coerce')
 
     # Solo trade chiusi
+    df['Open Date'] = pd.to_datetime(df['Open Date'], dayfirst=True, errors='coerce')
+    df['Close Date'] = pd.to_datetime(df['Close Date'], dayfirst=True, errors='coerce')
+
+    min_date = df['Open Date'].min()
+    max_date = df['Close Date'].max()
+
+    start_date = st.date_input("📅 Data inizio filtro", min_value=min_date.date(), max_value=max_date.date(), value=min_date.date())
+    end_date = st.date_input("📅 Data fine filtro", min_value=min_date.date(), max_value=max_date.date(), value=max_date.date())
+
+    df = df[(df['Open Date'].dt.date >= start_date) & (df['Open Date'].dt.date <= end_date)]
+
     df_closed = df[df['Close Date'].notna()].sort_values('Close Date').reset_index(drop=True)
     df_closed['Profit'] = pd.to_numeric(df_closed['Profit'], errors='coerce').round(2)
     df_closed['Pips'] = pd.to_numeric(df_closed['Pips'], errors='coerce').round(1)
