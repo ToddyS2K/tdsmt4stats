@@ -51,15 +51,11 @@ if uploaded_file is not None:
     min_date = df['Open Date'].min()
     max_date = df['Close Date'].max()
 
-    start_date_str = st.text_input("📅 Data inizio filtro (GG/MM/AAAA)", min_date.strftime('%d/%m/%Y'))
-    try:
-        start_date = pd.to_datetime(start_date_str, dayfirst=True).date()
+    start_date = st.date_input("📅 Data inizio filtro", min_value=min_date.date(), max_value=max_date.date(), value=min_date.date())
     except:
         st.error("Formato data non valido. Usa GG/MM/AAAA.")
         st.stop()
-    end_date_str = st.text_input("📅 Data fine filtro (GG/MM/AAAA)", max_date.strftime('%d/%m/%Y'))
-    try:
-        end_date = pd.to_datetime(end_date_str, dayfirst=True).date()
+    end_date = st.date_input("📅 Data fine filtro", min_value=min_date.date(), max_value=max_date.date(), value=max_date.date())
     except:
         st.error("Formato data non valido. Usa GG/MM/AAAA.")
         st.stop()
