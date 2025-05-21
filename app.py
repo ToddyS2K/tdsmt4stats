@@ -51,7 +51,7 @@ if uploaded_file is not None:
     min_date = df['Open Date'].min()
     max_date = df['Close Date'].max()
 
-    start_date = st.date_input("📅 Data inizio filtro", min_value=min_date.date(), max_value=max_date.date(), value=min_date.date(), format="%d/%m/%Y")
+    start_date = st.date_input("📅 Data inizio filtro", min_value=min_date.date(), max_value=max_date.date(), value=min_date.date(), )
     end_date = st.date_input("📅 Data fine filtro", min_value=min_date.date(), max_value=max_date.date(), value=max_date.date(), format="%d/%m/%Y")
 
     df = df[(df['Open Date'].dt.date >= start_date) & (df['Open Date'].dt.date <= end_date)]
