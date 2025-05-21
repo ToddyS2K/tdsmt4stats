@@ -32,7 +32,6 @@ if uploaded_file is not None:
         for idx, table in enumerate(tables):
             rows = table.find_all('tr')
             for i, row in enumerate(rows):
-                # Cerca la prima riga che somiglia a un'intestazione, anche se fatta con <td>
                 cells = [td.get_text(strip=True).replace('\xa0', ' ') for td in row.find_all('td')]
                 match_count = sum(col in cells for col in ['Open Time', 'Close Time', 'Type', 'Size', 'Item', 'Profit'])
                 if match_count >= 5:
@@ -40,7 +39,6 @@ if uploaded_file is not None:
                     data_rows = []
                     for data_row in rows[i+1:]:
                         data_cells = [td.get_text(strip=True) for td in data_row.find_all('td')]
-                        # Solo righe con numero di celle uguale alle intestazioni
                         if len(data_cells) == len(headers):
                             data_rows.append(data_cells)
                     if data_rows:
@@ -53,8 +51,6 @@ if uploaded_file is not None:
 
         headers, rows = best_table
         df = pd.DataFrame(rows, columns=headers)
-        from pandas.io.parsers import ParserBase
-        df.columns = ParserBase({'names': df.columns})._maybe_dedup_names(df.columns)
 
         df.rename(columns={
             'Open Time': 'Open Date',
