@@ -29,7 +29,7 @@ if uploaded_file is not None:
         df = None
         for table in tables:
             headers = [th.get_text(strip=True) for th in table.find_all('th')]
-            if 'Open Time' in headers and 'Close Time' in headers and 'Type' in headers and 'Size' in headers and 'Item' in headers and 'Profit' in headers and 'Price' in headers and 'Price.1' in headers:
+            if {'Open Time', 'Close Time', 'Type', 'Size', 'Item', 'Profit'}.issubset(set(headers)):
                 rows = []
                 for row in table.find_all('tr')[1:]:
                     cells = [td.get_text(strip=True) for td in row.find_all('td')]
@@ -37,17 +37,18 @@ if uploaded_file is not None:
                         rows.append(cells)
                 df = pd.DataFrame(rows, columns=headers)
                 df.rename(columns={
-                    'Open Time': 'Open Date',
-                    'Close Time': 'Close Date',
-                    'Type': 'Action',
-                    'Item': 'Symbol',
-                    'Size': 'Lots',
-                    'Price': 'Open Price',
-                    'Price.1': 'Close Price'
-                }, inplace=True)
-                df['Open Price'] = pd.to_numeric(df['Open Price'], errors='coerce')
-                df['Close Price'] = pd.to_numeric(df['Close Price'], errors='coerce')
+                'Open Time': 'Open Date',
+                'Close Time': 'Close Date',
+                'Type': 'Action',
+                'Item': 'Symbol',
+                'Size': 'Lots'
+            }, inplace=True)
+            if 'Price' in df.columns and 'Price.1' in df.columns:
+                df['Open Price'] = pd.to_numeric(df['Price'], errors='coerce')
+                df['Close Price'] = pd.to_numeric(df['Price.1'], errors='coerce')
                 df['Pips'] = ((df['Close Price'] - df['Open Price']) * 10000).round(1)
+            else:
+                df['Pips'] = 0.0
                 break
 
         if df is None:
