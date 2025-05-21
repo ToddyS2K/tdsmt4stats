@@ -106,17 +106,24 @@ if uploaded_file is not None:
 
     st.markdown("### 🧾 Trade Chiusi (in % e Pips)")
     closed_table = df_closed[['Close Date', 'Symbol', 'Action', 'Profit', 'Pips']].copy()
-    closed_table['Profit %'] = (closed_table['Profit'] / starting_equity * 100).round(2)
-    closed_table['Close Date'] = closed_table['Close Date'].dt.strftime('%d-%m-%Y')  # ← Formato italiano
+
+    # Formattazione
+    closed_table['Close Date'] = closed_table['Close Date'].dt.strftime('%d-%m-%Y')
+    closed_table['Profit %'] = (closed_table['Profit'] / starting_equity * 100).map(lambda x: f"{x:.2f}")
+    closed_table['Pips'] = closed_table['Pips'].map(lambda x: f"{x:.1f}".rstrip('0').rstrip('.') if pd.notnull(x) else '')
+
     closed_table = closed_table[['Close Date', 'Symbol', 'Action', 'Profit %', 'Pips']]
 
     def color_profit(val):
-        if val > 0:
-            return 'color: green'
-        elif val < 0:
-            return 'color: red'
-        else:
-            return ''
+        try:
+            val = float(val.replace('%', ''))
+            if val > 0:
+                return 'color: green'
+            elif val < 0:
+                return 'color: red'
+        except:
+            pass
+        return ''
 
     styled_closed = closed_table.style.applymap(color_profit, subset=['Profit %'])
     st.dataframe(styled_closed, use_container_width=True)
@@ -167,7 +174,10 @@ if uploaded_file is not None:
 
         pdf.set_font("Arial", size=10)
         for _, row in table.iterrows():
-            profit_percent = row['Profit %']
+            try:
+                profit_percent = float(row['Profit %'].replace('%', ''))
+            except:
+                profit_percent = 0
             pips = row['Pips']
             if profit_percent > 0:
                 pdf.set_text_color(0, 128, 0)
@@ -179,8 +189,8 @@ if uploaded_file is not None:
             pdf.cell(col_widths[0], 8, row['Close Date'], border=1)
             pdf.cell(col_widths[1], 8, str(row['Symbol']), border=1)
             pdf.cell(col_widths[2], 8, str(row['Action']), border=1)
-            pdf.cell(col_widths[3], 8, f"{profit_percent:.2f}%", border=1, align='R')
-            pdf.cell(col_widths[4], 8, f"{pips:.1f}", border=1, align='R')
+            pdf.cell(col_widths[3], 8, f"{row['Profit %']}%", border=1, align='R')
+            pdf.cell(col_widths[4], 8, str(pips), border=1, align='R')
             pdf.ln()
 
         pdf.set_text_color(0, 0, 0)
