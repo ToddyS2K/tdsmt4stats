@@ -2,5 +2,3 @@ streamlit
 pandas
 matplotlib
 fpdf
-lxml
-beautifulsoup4
