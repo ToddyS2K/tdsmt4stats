@@ -27,8 +27,7 @@ if uploaded_file is not None:
         soup = BeautifulSoup(uploaded_file, 'html.parser')
         tables = soup.find_all('table')
         df = None
-        if tables:
-            table = tables[0]
+        for table in tables:
             headers = [th.get_text(strip=True) for th in table.find_all('th')]
             if {'Open Time', 'Close Time', 'Type', 'Size', 'Item', 'Profit'}.issubset(set(headers)):
                 rows = []
@@ -37,6 +36,22 @@ if uploaded_file is not None:
                     if cells:
                         rows.append(cells)
                 df = pd.DataFrame(rows, columns=headers)
+                from pandas.io.parsers import ParserBase
+                df.columns = ParserBase({'names': df.columns})._maybe_dedup_names(df.columns)
+                df.rename(columns={
+                    'Open Time': 'Open Date',
+                    'Close Time': 'Close Date',
+                    'Type': 'Action',
+                    'Item': 'Symbol',
+                    'Size': 'Lots'
+                }, inplace=True)
+                if 'Price' in df.columns and 'Price.1' in df.columns:
+                    df['Open Price'] = pd.to_numeric(df['Price'], errors='coerce')
+                    df['Close Price'] = pd.to_numeric(df['Price.1'], errors='coerce')
+                    df['Pips'] = ((df['Close Price'] - df['Open Price']) * 10000).round(1)
+                else:
+                    df['Pips'] = 0.0
+                break
                 from pandas.io.parsers import ParserBase
                 df.columns = ParserBase({'names': df.columns})._maybe_dedup_names(df.columns)
             headers = [th.get_text(strip=True) for th in table.find_all('th')]
@@ -63,8 +78,6 @@ if uploaded_file is not None:
                     df['Pips'] = ((df['Close Price'] - df['Open Price']) * 10000).round(1)
                 else:
                     df['Pips'] = 0.0
-                break
-
         if df is None:
             st.error("Non è stato possibile trovare la tabella dei trade chiusi nel file HTML.")
             st.stop()
