@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -16,83 +17,21 @@ if starting_equity <= 0:
     st.error("⚠️ Inserisci un capitale iniziale maggiore di 0.")
     st.stop()
 
-uploaded_file = st.file_uploader("Carica il file CSV di Myfxbook o HTML da MT4", type=["csv", "htm", "html"])
+uploaded_file = st.file_uploader("Carica il file CSV esportato da Myfxbook", type=["csv"])
 
 if uploaded_file is not None:
-    if uploaded_file.name.endswith('.csv'):
-        df = pd.read_csv(uploaded_file)
+    df = pd.read_csv(uploaded_file)
 
-    elif uploaded_file.name.endswith(('.htm', '.html')):
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(uploaded_file, 'html.parser')
-        tables = soup.find_all('table')
-        df = None
-
-        best_table = None
-        for idx, table in enumerate(tables):
-            rows = table.find_all('tr')
-            for i, row in enumerate(rows):
-                cells = [td.get_text(strip=True).replace('\xa0', ' ') for td in row.find_all('td')]
-                match_count = sum(col in cells for col in ['Open Time', 'Close Time', 'Type', 'Size', 'Item', 'Profit'])
-                if match_count >= 5:
-                    headers = cells
-                    data_rows = []
-                    for data_row in rows[i+1:]:
-                        data_cells = [td.get_text(strip=True) for td in data_row.find_all('td')]
-                        if len(data_cells) == len(headers):
-                            data_rows.append(data_cells)
-                    if data_rows:
-                        best_table = (headers, data_rows)
-                    break
-
-        if best_table is None:
-            st.error("❌ Nessuna tabella valida trovata nel file HTML.")
-            st.stop()
-
-        headers, rows = best_table
-        df = pd.DataFrame(rows, columns=headers)
-
-        df.rename(columns={
-            'Open Time': 'Open Date',
-            'Close Time': 'Close Date',
-            'Type': 'Action',
-            'Item': 'Symbol',
-            'Size': 'Lots'
-        }, inplace=True)
-
-        if 'Price' in df.columns and 'Price.1' in df.columns:
-            df['Open Price'] = pd.to_numeric(df['Price'], errors='coerce')
-            df['Close Price'] = pd.to_numeric(df['Price.1'], errors='coerce')
-            df['Pips'] = ((df['Close Price'] - df['Open Price']) * 10000).round(1)
-        else:
-            df['Pips'] = 0.0
-
-    else:
-        st.error("❌ Formato file non supportato. Carica un file CSV o HTML.")
-        st.stop()
-
+    # Parsing date
     df['Open Date'] = pd.to_datetime(df['Open Date'], dayfirst=True, errors='coerce')
     df['Close Date'] = pd.to_datetime(df['Close Date'], dayfirst=True, errors='coerce')
 
-    if df['Open Date'].isna().all() or df['Close Date'].isna().all():
-        st.error("❌ Nessuna data valida trovata nei trade.")
-        st.stop()
-
-    # --- Calcoli e visualizzazione ---
-
-    min_date = df['Open Date'].min()
-    max_date = df['Close Date'].max()
-
-    start_date = st.date_input("📅 Data inizio filtro", min_value=min_date.date(), max_value=max_date.date(), value=min_date.date())
-    end_date = st.date_input("📅 Data fine filtro", min_value=min_date.date(), max_value=max_date.date(), value=max_date.date())
-
-    df = df[(df['Open Date'].dt.date >= start_date) & (df['Open Date'].dt.date <= end_date)]
-
+    # Solo trade chiusi
     df_closed = df[df['Close Date'].notna()].sort_values('Close Date').reset_index(drop=True)
-    df_closed['Close Date'] = pd.to_datetime(df_closed['Close Date'], errors='coerce')
     df_closed['Profit'] = pd.to_numeric(df_closed['Profit'], errors='coerce').round(2)
     df_closed['Pips'] = pd.to_numeric(df_closed['Pips'], errors='coerce').round(1)
 
+    # Equity e Drawdown
     df_closed['Equity'] = starting_equity + df_closed['Profit'].cumsum()
     df_closed['Equity %'] = (df_closed['Equity'] - starting_equity) / starting_equity * 100
     df_closed['High Watermark'] = df_closed['Equity'].cummax()
@@ -133,11 +72,19 @@ if uploaded_file is not None:
     for key, value in stats.items():
         st.write(f"**{key}:** {value}")
 
-    # Grafici
+    # Interpolazione Equity/Drawdown giornaliero
+    daily_data = df_closed[['Close Date', 'Equity %', 'Drawdown %']].copy()
+    daily_data = (
+        daily_data.groupby('Close Date').last()
+        .resample('D')
+        .ffill()
+        .reset_index()
+    )
+
+    # Grafico Equity
     st.subheader("📊 Equity Curve (%)")
-    equity_data = df_closed[['Close Date', 'Equity %']].dropna()
     fig1, ax1 = plt.subplots()
-    ax1.plot(equity_data['Close Date'], equity_data['Equity %'], linewidth=2)
+    ax1.plot(daily_data['Close Date'], daily_data['Equity %'], linewidth=2)
     ax1.set_xlabel("Data")
     ax1.set_ylabel("Equity (%)")
     ax1.grid(True)
@@ -147,10 +94,13 @@ if uploaded_file is not None:
     fig1.tight_layout()
     st.pyplot(fig1)
 
+    temp_eq_path = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    fig1.savefig(temp_eq_path.name)
+
+    # Grafico Drawdown
     st.subheader("📊 Drawdown (%)")
-    drawdown_data = df_closed[['Close Date', 'Drawdown %']].dropna()
     fig2, ax2 = plt.subplots()
-    ax2.plot(drawdown_data['Close Date'], drawdown_data['Drawdown %'], color='red', linewidth=2)
+    ax2.plot(daily_data['Close Date'], daily_data['Drawdown %'], color='red', linewidth=2)
     ax2.set_xlabel("Data")
     ax2.set_ylabel("Drawdown (%)")
     ax2.grid(True)
@@ -160,8 +110,11 @@ if uploaded_file is not None:
     fig2.tight_layout()
     st.pyplot(fig2)
 
-    # Tabella trade
-    st.subheader("🧾 Trade Chiusi")
+    temp_dd_path = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    fig2.savefig(temp_dd_path.name)
+
+    # Tabella con Profit % e Pips
+    st.markdown("### 🧾 Trade Chiusi (in % e Pips)")
     closed_table = df_closed[['Close Date', 'Symbol', 'Action', 'Profit', 'Pips']].copy()
     closed_table['Profit %'] = (closed_table['Profit'] / starting_equity * 100).round(2)
     closed_table = closed_table[['Close Date', 'Symbol', 'Action', 'Profit %', 'Pips']]
@@ -174,9 +127,87 @@ if uploaded_file is not None:
         else:
             return ''
 
-    st.dataframe(closed_table.style.applymap(color_profit, subset=['Profit %']), use_container_width=True)
+    styled_closed = closed_table.style.applymap(color_profit, subset=['Profit %'])
+    st.dataframe(styled_closed, use_container_width=True)
 
-    # [Tutte le funzionalità esistenti come calcoli, grafici, PDF, ecc. restano uguali]
+    # PDF con statistica + Pips
+    def generate_pdf(stats, table, equity_img, drawdown_img):
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+        pdf.cell(200, 10, "Report MT4 - Trade Chiusi", ln=True, align='C')
+        pdf.ln(8)
+
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(200, 10, "Statistiche", ln=True)
+        pdf.set_font("Arial", size=10)
+
+        col1_width = 90
+        col2_width = 90
+
+        pdf.set_fill_color(240, 240, 240)
+        pdf.set_font("Arial", 'B', 10)
+        pdf.cell(col1_width, 8, "Parametro", border=1, fill=True)
+        pdf.cell(col2_width, 8, "Valore", border=1, ln=True, fill=True)
+        pdf.set_font("Arial", size=10)
+
+        for key, value in stats.items():
+            pdf.cell(col1_width, 8, key, border=1)
+            pdf.cell(col2_width, 8, str(value), border=1, ln=True)
+
+        pdf.ln(5)
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(200, 10, "Equity Curve", ln=True)
+        pdf.image(equity_img, w=180)
+        pdf.ln(5)
+
+        pdf.cell(200, 10, "Drawdown", ln=True)
+        pdf.image(drawdown_img, w=180)
+        pdf.ln(5)
+
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(200, 10, "Trade Chiusi", ln=True)
+        pdf.set_font("Arial", 'B', 10)
+        col_widths = [35, 35, 25, 35, 30]
+        headers = ['Data Chiusura', 'Simbolo', 'Azione', 'Profitto %', 'Pips']
+        for i, header in enumerate(headers):
+            pdf.set_fill_color(220, 220, 220)
+            pdf.cell(col_widths[i], 8, header, border=1, align='C', fill=True)
+        pdf.ln()
+
+        pdf.set_font("Arial", size=10)
+        for _, row in table.iterrows():
+            profit_percent = row['Profit %']
+            pips = row['Pips']
+            if profit_percent > 0:
+                pdf.set_text_color(0, 128, 0)
+            elif profit_percent < 0:
+                pdf.set_text_color(255, 0, 0)
+            else:
+                pdf.set_text_color(0, 0, 0)
+
+            pdf.cell(col_widths[0], 8, str(row['Close Date'].date()), border=1)
+            pdf.cell(col_widths[1], 8, str(row['Symbol']), border=1)
+            pdf.cell(col_widths[2], 8, str(row['Action']), border=1)
+            pdf.cell(col_widths[3], 8, f"{profit_percent:.2f}%", border=1, align='R')
+            pdf.cell(col_widths[4], 8, f"{pips:.1f}", border=1, align='R')
+            pdf.ln()
+
+        pdf.set_text_color(0, 0, 0)
+        pdf_bytes = pdf.output(dest='S').encode('latin1')
+        return BytesIO(pdf_bytes)
+
+    st.subheader("📄 Esporta PDF")
+    pdf_buffer = generate_pdf(stats, closed_table, temp_eq_path.name, temp_dd_path.name)
+    st.download_button(
+        label="📥 Scarica PDF con grafici",
+        data=pdf_buffer,
+        file_name="report_mt4_completo.pdf",
+        mime="application/pdf"
+    )
+
+    os.remove(temp_eq_path.name)
+    os.remove(temp_dd_path.name)
 
 else:
     st.info("Carica un file CSV per iniziare.")
