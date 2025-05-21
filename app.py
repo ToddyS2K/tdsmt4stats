@@ -22,11 +22,20 @@ if uploaded_file is not None:
     if uploaded_file.name.endswith('.csv'):
         df = pd.read_csv(uploaded_file)
     elif uploaded_file.name.endswith(('.htm', '.html')):
-        tables = pd.read_html(uploaded_file)
+        from bs4 import BeautifulSoup
+
+        soup = BeautifulSoup(uploaded_file, 'html.parser')
+        tables = soup.find_all('table')
         df = None
         for table in tables:
-            if {'Open Time', 'Close Time', 'Type', 'Size', 'Item', 'Profit', 'Price', 'Price.1'}.issubset(table.columns):
-                df = table.copy()
+            headers = [th.get_text(strip=True) for th in table.find_all('th')]
+            if 'Open Time' in headers and 'Close Time' in headers and 'Type' in headers and 'Size' in headers and 'Item' in headers and 'Profit' in headers and 'Price' in headers and 'Price.1' in headers:
+                rows = []
+                for row in table.find_all('tr')[1:]:
+                    cells = [td.get_text(strip=True) for td in row.find_all('td')]
+                    if cells:
+                        rows.append(cells)
+                df = pd.DataFrame(rows, columns=headers)
                 df.rename(columns={
                     'Open Time': 'Open Date',
                     'Close Time': 'Close Date',
@@ -40,6 +49,7 @@ if uploaded_file is not None:
                 df['Close Price'] = pd.to_numeric(df['Close Price'], errors='coerce')
                 df['Pips'] = ((df['Close Price'] - df['Open Price']) * 10000).round(1)
                 break
+
         if df is None:
             st.error("Non è stato possibile trovare la tabella dei trade chiusi nel file HTML.")
             st.stop()
