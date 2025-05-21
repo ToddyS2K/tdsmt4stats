@@ -30,28 +30,29 @@ if uploaded_file is not None:
 
         best_table = None
         for idx, table in enumerate(tables):
-            headers = [th.text.strip().replace('\xa0', ' ') for th in table.find_all('th')]
-            st.write(f"Tabella {idx} headers:", headers)  # DEBUG visivo
-
-            # Controlla che almeno 5 delle 6 colonne chiave siano presenti
-            match_count = sum(col in headers for col in ['Open Time', 'Close Time', 'Type', 'Size', 'Item', 'Profit'])
-            if match_count >= 5:
-                rows = []
-                for row in table.find_all('tr')[1:]:
-                    cells = [td.get_text(strip=True) for td in row.find_all('td')]
-                    # Accetta righe con almeno 5 celle (salta righe tipo saldo, deposito, intestazioni duplicate)
-                    if len(cells) >= 5 and 'Profit' in headers:
-                        rows.append(cells)
-                if rows:
-                    if best_table is None or len(rows) > len(best_table[1]):
-                        best_table = (headers, rows)
+            rows = table.find_all('tr')
+            for i, row in enumerate(rows):
+                # Cerca la prima riga che somiglia a un'intestazione, anche se fatta con <td>
+                cells = [td.get_text(strip=True).replace('\xa0', ' ') for td in row.find_all('td')]
+                match_count = sum(col in cells for col in ['Open Time', 'Close Time', 'Type', 'Size', 'Item', 'Profit'])
+                if match_count >= 5:
+                    headers = cells
+                    data_rows = []
+                    for data_row in rows[i+1:]:
+                        data_cells = [td.get_text(strip=True) for td in data_row.find_all('td')]
+                        if len(data_cells) >= 5:
+                            data_rows.append(data_cells)
+                    if data_rows:
+                        if best_table is None or len(data_rows) > len(best_table[1]):
+                            best_table = (headers, data_rows)
+                    break
 
         if best_table is None:
             st.error("❌ Nessuna tabella valida trovata nel file HTML.")
             st.stop()
 
         headers, rows = best_table
-        df = pd.DataFrame(rows, columns=headers[:len(rows[0])])  # adatta intestazioni se alcune colonne sono in eccesso
+        df = pd.DataFrame(rows, columns=headers[:len(rows[0])])
         from pandas.io.parsers import ParserBase
         df.columns = ParserBase({'names': df.columns})._maybe_dedup_names(df.columns)
 
