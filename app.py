@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -10,7 +9,6 @@ import os
 
 st.title("Analisi conto MT4 (Profitto in percentuale)")
 
-# Capitale iniziale
 starting_equity = st.number_input("Inserisci il capitale iniziale (€)", min_value=1.0, value=1000.0)
 
 if starting_equity <= 0:
@@ -22,16 +20,13 @@ uploaded_file = st.file_uploader("Carica il file CSV esportato da Myfxbook", typ
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
 
-    # Parsing date
     df['Open Date'] = pd.to_datetime(df['Open Date'], dayfirst=True, errors='coerce')
     df['Close Date'] = pd.to_datetime(df['Close Date'], dayfirst=True, errors='coerce')
 
-    # Solo trade chiusi
     df_closed = df[df['Close Date'].notna()].sort_values('Close Date').reset_index(drop=True)
     df_closed['Profit'] = pd.to_numeric(df_closed['Profit'], errors='coerce').round(2)
     df_closed['Pips'] = pd.to_numeric(df_closed['Pips'], errors='coerce').round(1)
 
-    # Equity e Drawdown
     df_closed['Equity'] = starting_equity + df_closed['Profit'].cumsum()
     df_closed['Equity %'] = (df_closed['Equity'] - starting_equity) / starting_equity * 100
     df_closed['High Watermark'] = df_closed['Equity'].cummax()
@@ -41,7 +36,6 @@ if uploaded_file is not None:
 
     st.subheader(f"📉 Max Drawdown: {max_drawdown:.2f}%")
 
-    # Statistiche
     st.subheader("📈 Statistiche del Trading")
     total_trades = len(df_closed)
     winning_trades = df_closed[df_closed['Profit'] > 0]
@@ -72,7 +66,6 @@ if uploaded_file is not None:
     for key, value in stats.items():
         st.write(f"**{key}:** {value}")
 
-    # Interpolazione Equity/Drawdown giornaliero
     daily_data = df_closed[['Close Date', 'Equity %', 'Drawdown %']].copy()
     daily_data = (
         daily_data.groupby('Close Date').last()
@@ -81,7 +74,6 @@ if uploaded_file is not None:
         .reset_index()
     )
 
-    # Grafico Equity
     st.subheader("📊 Equity Curve (%)")
     fig1, ax1 = plt.subplots()
     ax1.plot(daily_data['Close Date'], daily_data['Equity %'], linewidth=2)
@@ -97,7 +89,6 @@ if uploaded_file is not None:
     temp_eq_path = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
     fig1.savefig(temp_eq_path.name)
 
-    # Grafico Drawdown
     st.subheader("📊 Drawdown (%)")
     fig2, ax2 = plt.subplots()
     ax2.plot(daily_data['Close Date'], daily_data['Drawdown %'], color='red', linewidth=2)
@@ -113,10 +104,10 @@ if uploaded_file is not None:
     temp_dd_path = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
     fig2.savefig(temp_dd_path.name)
 
-    # Tabella con Profit % e Pips
     st.markdown("### 🧾 Trade Chiusi (in % e Pips)")
     closed_table = df_closed[['Close Date', 'Symbol', 'Action', 'Profit', 'Pips']].copy()
     closed_table['Profit %'] = (closed_table['Profit'] / starting_equity * 100).round(2)
+    closed_table['Close Date'] = closed_table['Close Date'].dt.strftime('%d-%m-%Y')  # ← Formato italiano
     closed_table = closed_table[['Close Date', 'Symbol', 'Action', 'Profit %', 'Pips']]
 
     def color_profit(val):
@@ -130,7 +121,6 @@ if uploaded_file is not None:
     styled_closed = closed_table.style.applymap(color_profit, subset=['Profit %'])
     st.dataframe(styled_closed, use_container_width=True)
 
-    # PDF con statistica + Pips
     def generate_pdf(stats, table, equity_img, drawdown_img):
         pdf = FPDF()
         pdf.add_page()
@@ -186,7 +176,7 @@ if uploaded_file is not None:
             else:
                 pdf.set_text_color(0, 0, 0)
 
-            pdf.cell(col_widths[0], 8, str(row['Close Date'].date()), border=1)
+            pdf.cell(col_widths[0], 8, row['Close Date'], border=1)
             pdf.cell(col_widths[1], 8, str(row['Symbol']), border=1)
             pdf.cell(col_widths[2], 8, str(row['Action']), border=1)
             pdf.cell(col_widths[3], 8, f"{profit_percent:.2f}%", border=1, align='R')
