@@ -27,7 +27,18 @@ if uploaded_file is not None:
         soup = BeautifulSoup(uploaded_file, 'html.parser')
         tables = soup.find_all('table')
         df = None
-        for table in tables:
+        if tables:
+            table = tables[0]
+            headers = [th.get_text(strip=True) for th in table.find_all('th')]
+            if {'Open Time', 'Close Time', 'Type', 'Size', 'Item', 'Profit'}.issubset(set(headers)):
+                rows = []
+                for row in table.find_all('tr')[1:]:
+                    cells = [td.get_text(strip=True) for td in row.find_all('td')]
+                    if cells:
+                        rows.append(cells)
+                df = pd.DataFrame(rows, columns=headers)
+                from pandas.io.parsers import ParserBase
+                df.columns = ParserBase({'names': df.columns})._maybe_dedup_names(df.columns)
             headers = [th.get_text(strip=True) for th in table.find_all('th')]
             if {'Open Time', 'Close Time', 'Type', 'Size', 'Item', 'Profit'}.issubset(set(headers)):
                 rows = []
