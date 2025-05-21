@@ -40,11 +40,11 @@ if uploaded_file is not None:
                     data_rows = []
                     for data_row in rows[i+1:]:
                         data_cells = [td.get_text(strip=True) for td in data_row.find_all('td')]
-                        if len(data_cells) >= 5:
+                        # Solo righe con numero di celle uguale alle intestazioni
+                        if len(data_cells) == len(headers):
                             data_rows.append(data_cells)
                     if data_rows:
-                        if best_table is None or len(data_rows) > len(best_table[1]):
-                            best_table = (headers, data_rows)
+                        best_table = (headers, data_rows)
                     break
 
         if best_table is None:
@@ -52,7 +52,7 @@ if uploaded_file is not None:
             st.stop()
 
         headers, rows = best_table
-        df = pd.DataFrame(rows, columns=headers[:len(rows[0])])
+        df = pd.DataFrame(rows, columns=headers)
         from pandas.io.parsers import ParserBase
         df.columns = ParserBase({'names': df.columns})._maybe_dedup_names(df.columns)
 
