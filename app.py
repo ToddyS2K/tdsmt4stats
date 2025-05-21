@@ -216,7 +216,7 @@ if uploaded_file is not None:
             else:
                 pdf.set_text_color(0, 0, 0)
 
-            pdf.cell(col_widths[0], 8, row['Close Date'].strftime('%d/%m/%Y'), border=1)
+            pdf.cell(col_widths[0], 8, row['Close Date'], border=1)
             pdf.cell(col_widths[1], 8, str(row['Symbol']), border=1)
             pdf.cell(col_widths[2], 8, str(row['Action']), border=1)
             pdf.cell(col_widths[3], 8, f"{profit_percent:.2f}%", border=1, align='R')
