@@ -25,8 +25,20 @@ if uploaded_file is not None:
         tables = pd.read_html(uploaded_file)
         df = None
         for table in tables:
-            if {'Open Time', 'Close Time', 'Symbol', 'Type', 'Lots', 'Profit', 'Pips'}.issubset(table.columns):
-                df = table
+            if {'Open Time', 'Close Time', 'Type', 'Size', 'Item', 'Profit', 'Price', 'Price.1'}.issubset(table.columns):
+                df = table.copy()
+                df.rename(columns={
+                    'Open Time': 'Open Date',
+                    'Close Time': 'Close Date',
+                    'Type': 'Action',
+                    'Item': 'Symbol',
+                    'Size': 'Lots',
+                    'Price': 'Open Price',
+                    'Price.1': 'Close Price'
+                }, inplace=True)
+                df['Open Price'] = pd.to_numeric(df['Open Price'], errors='coerce')
+                df['Close Price'] = pd.to_numeric(df['Close Price'], errors='coerce')
+                df['Pips'] = ((df['Close Price'] - df['Open Price']) * 10000).round(1)
                 break
         if df is None:
             st.error("Non è stato possibile trovare la tabella dei trade chiusi nel file HTML.")
