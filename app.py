@@ -51,12 +51,13 @@ if uploaded_file is not None:
     min_date = df['Open Date'].min()
     max_date = df['Close Date'].max()
 
-    start_date = st.date_input("📅 Data inizio filtro", min_value=min_date.date(), max_value=max_date.date(), value=min_date.date())
-    end_date = st.date_input("📅 Data fine filtro", min_value=min_date.date(), max_value=max_date.date(), value=max_date.date())
+    start_date = st.date_input("📅 Data inizio filtro", min_value=min_date.date(), max_value=max_date.date(), value=min_date.date(), format="%d/%m/%Y")
+    end_date = st.date_input("📅 Data fine filtro", min_value=min_date.date(), max_value=max_date.date(), value=max_date.date(), format="%d/%m/%Y")
 
     df = df[(df['Open Date'].dt.date >= start_date) & (df['Open Date'].dt.date <= end_date)]
 
     df_closed = df[df['Close Date'].notna()].sort_values('Close Date').reset_index(drop=True)
+    df_closed['Close Date'] = df_closed['Close Date'].dt.strftime('%d/%m/%Y')
     df_closed['Profit'] = pd.to_numeric(df_closed['Profit'], errors='coerce').round(2)
     df_closed['Pips'] = pd.to_numeric(df_closed['Pips'], errors='coerce').round(1)
 
@@ -215,7 +216,7 @@ if uploaded_file is not None:
             else:
                 pdf.set_text_color(0, 0, 0)
 
-            pdf.cell(col_widths[0], 8, str(row['Close Date'].date()), border=1)
+            pdf.cell(col_widths[0], 8, row['Close Date'].strftime('%d/%m/%Y'), border=1)
             pdf.cell(col_widths[1], 8, str(row['Symbol']), border=1)
             pdf.cell(col_widths[2], 8, str(row['Action']), border=1)
             pdf.cell(col_widths[3], 8, f"{profit_percent:.2f}%", border=1, align='R')
