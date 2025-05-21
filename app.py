@@ -29,9 +29,13 @@ if uploaded_file is not None:
         df = None
 
         best_table = None
-        for table in tables:
+        for idx, table in enumerate(tables):
             headers = [th.text.strip().replace('\xa0', ' ') for th in table.find_all('th')]
-            if all(col in headers for col in ['Open Time', 'Close Time', 'Type', 'Size', 'Item', 'Profit']):
+            st.write(f"Tabella {idx} headers:", headers)  # DEBUG visivo
+
+            # Controlla solo che le colonne chiave siano presenti (più tollerante)
+            match_count = sum(col in headers for col in ['Open Time', 'Close Time', 'Type', 'Size', 'Item', 'Profit'])
+            if match_count >= 5:  # almeno 5 su 6
                 rows = []
                 for row in table.find_all('tr')[1:]:
                     cells = [td.get_text(strip=True) for td in row.find_all('td')]
