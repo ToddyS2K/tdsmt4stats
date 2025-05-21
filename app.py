@@ -36,6 +36,8 @@ if uploaded_file is not None:
                     if cells:
                         rows.append(cells)
                 df = pd.DataFrame(rows, columns=headers)
+                from pandas.io.parsers import ParserBase
+                df.columns = ParserBase({'names': df.columns})._maybe_dedup_names(df.columns)
                 df.rename(columns={
                 'Open Time': 'Open Date',
                 'Close Time': 'Close Date',
